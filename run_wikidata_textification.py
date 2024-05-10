@@ -50,7 +50,7 @@ wd_textification = WikidataTextification(
 print(qids)
 
 start = time()
-wd_statements = wd_textification.get_wikidata_statements(qids[:1])
+wd_statements = wd_textification.get_wikidata_statements(qids)
 print(time() - start)
 
 print(len(wd_textification.wikidata_statements))

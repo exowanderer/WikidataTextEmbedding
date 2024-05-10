@@ -31,10 +31,10 @@ from tqdm import tqdm  # For displaying progress bars in loops.
 
 try:
     from google.colab import userdata
-    USE_OS_ENVIRON = False
+    USE_LOCAL = False
 except Exception as e:
-    print('USE_OS_ENVIRON = True')
-    USE_OS_ENVIRON = True
+    print('USE_LOCAL = True')
+    USE_LOCAL = True
 
 
 class WikidataTextification:
@@ -75,6 +75,8 @@ class WikidataTextification:
             version=0, verbose=False, wikidata_base='"wikidata.org"',
             return_list=True, save_filename=None):
 
+        n_cores = max(n_cores, cpu_count() - 1) if USE_LOCAL else n_cores
+
         # Initialize the logger for this module.
         self.logger = self.get_logger(__name__)
         self.version = version
@@ -90,7 +92,7 @@ class WikidataTextification:
             'https://www.wikidata.org/wiki'
         )
 
-        if USE_OS_ENVIRON:
+        if USE_LOCAL:
             self.WIKIMEDIA_TOKEN = os.environ.get('WIKIMEDIA_TOKEN')
         else:
             self.WIKIMEDIA_TOKEN = userdata.get('WIKIMEDIA_TOKEN')
