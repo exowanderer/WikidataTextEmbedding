@@ -15,7 +15,7 @@ import sys
 # from bs4 import BeautifulSoup  # For parsing HTML and extracting information.
 
 # For performing Google searches using SerpApi.
-from serpapi import GoogleSearch
+# from serpapi import GoogleSearch
 
 from functools import partial  # For partial function application.
 
@@ -29,13 +29,21 @@ from numpy import unique, ndarray
 from time import time
 from tqdm import tqdm  # For displaying progress bars in loops.
 
-from google.colab import userdata
+try:
+    from google.colab import userdata
+    USE_OS_ENVIRON = False
+except Exception as e:
+    print('USE_OS_ENVIRON = True')
+    USE_OS_ENVIRON = True
 
 
 class WikidataTextification:
     # Logger
     @staticmethod
     def get_logger(name):
+        # if logger.get(name):
+        #     return loggers.get(name)
+        # else:
         # Create a logger
         logging.basicConfig(
             filename='wdchat_api.log',
@@ -44,7 +52,12 @@ class WikidataTextification:
         )
 
         logger = logging.getLogger(name)
+
+        if logger.hasHandlers():
+            logger.handlers.clear()
+
         logger.setLevel(logging.DEBUG)  # Set the logging level
+        logger.propagate = False
 
         # Create console handler and set level to debug
         handler = logging.StreamHandler(sys.stdout)
@@ -57,11 +70,14 @@ class WikidataTextification:
 
         return logger
 
-    def __init__(self, embedder=None, lang='en', timeout=10, n_cores=cpu_count(),
-                 verbose=False, wikidata_base='"wikidata.org"', return_list=True):
+    def __init__(
+            self, embedder=None, lang='en', timeout=10, n_cores=cpu_count(),
+            version=0, verbose=False, wikidata_base='"wikidata.org"',
+            return_list=True, save_filename=None):
 
         # Initialize the logger for this module.
         self.logger = self.get_logger(__name__)
+        self.version = version
 
         # Base URL for Wikidata API, with a default value.
         self.WIKIDATA_API_URL = os.environ.get(
@@ -74,9 +90,19 @@ class WikidataTextification:
             'https://www.wikidata.org/wiki'
         )
 
-        self.WIKIMEDIA_TOKEN = userdata.get('WIKIMEDIA_TOKEN')
+        if USE_OS_ENVIRON:
+            self.WIKIMEDIA_TOKEN = os.environ.get('WIKIMEDIA_TOKEN')
+        else:
+            self.WIKIMEDIA_TOKEN = userdata.get('WIKIMEDIA_TOKEN')
+
+        self.headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Basic {self.WIKIMEDIA_TOKEN}'
+        }
+
         self.GET_SUCCESS = 200
 
+        self.save_filename = save_filename
         self.embedder = embedder
         self.lang = lang
         self.timeout = timeout
@@ -99,11 +125,6 @@ class WikidataTextification:
             tuple: A tuple containing the JSON data and the final URL used for the API request.
         """
         user_agent = 'CoolBot/0.0 (https://example.org/coolbot/; coolbot@example.org)'
-
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.WIKIMEDIA_TOKEN}'
-        }
 
         # Adjust the API URL if it ends with 'wiki' by removing
         #   the last 3 characters.
@@ -132,8 +153,13 @@ class WikidataTextification:
             try:
                 # Open the URL and read the response.
                 with urllib.request.urlopen(thing_url) as j_inn:
-                    for key, val in headers.items():
+                    # j_inn.headers = j_inn.headers | self.headers
+                    for key, val in self.headers.items():
                         j_inn.headers[key] = val
+
+                    assert ('Authorization' in j_inn.headers), (
+                        'Authorization not in j_inn.headers'
+                    )
 
                     get_code = j_inn.getcode()
 
@@ -270,8 +296,8 @@ class WikidataTextification:
             qids = list(qids)
 
         for k, qid_ in enumerate(qids):
+            self.logger.debug(f'{k}: {qid_}')
             try:
-                # self.logger.debug(f'download_and_extract_items {k}: {qid_}')
                 # Fetch item JSON data from Wikidata using the QID.
                 item_json, item_url = self.get_item_from_wikidata(qid=qid_)
 
@@ -289,14 +315,18 @@ class WikidataTextification:
                 }
 
                 # Append a dictionary with item details to the items list.
-                self.items.append(item)
+                if self.version == 0:
+                    self.items.append(item)
 
-                # self.logger.debug(f'{len(self.wikidata_statements)=}')
                 # Convert each item fetched from Wikidata into statements.
+                if self.version == 1:
+                    statements_ = self.convert_wikidata_item_to_statements(
+                        item_json=item
+                    )
+                    self.wikidata_statements.extend(statements_)
                 # self.wikidata_statements.extend(
                 #     self.convert_wikidata_item_to_statements(item_json=item)
                 # )
-                # self.logger.debug(f'{len(self.wikidata_statements)=}')
 
             except Exception as e:
                 # Log any exceptions that occur during processing.
@@ -493,6 +523,11 @@ class WikidataTextification:
                     ])
 
             # Appending the constructed statement information to the list.
+
+            embedding_ = None
+            if self.embedder is not None:
+                embedding_ = self.embedder.encode(statement_)
+
             statements.append({
                 'qid': qid,
                 'pid': pid,
@@ -501,7 +536,7 @@ class WikidataTextification:
                 'property_label': property_label,
                 'value_content': value_content,
                 'statement': statement_,
-                'embedding': None if embedder is None else embedder.encode(statement_)
+                'embedding': embedding_
             })
 
         return statements  # Returning the list of constructed statements.
@@ -546,36 +581,21 @@ class WikidataTextification:
 
         # Processing each statement associated with the item in parallel.
         item_statements = item_json['item_data']['statements']
-        self.logger.debug(f'{len(item_statements)=}')
-        self.logger.debug(f'{len(self.wikidata_statements)=}')
 
         item_pool = partial(
             self.make_statement,
             qid=qid,
-            # embedder=embedder,
             item_label=item_label,
-            # lang=lang,
-            # timeout=timeout,
-            # api_url=api_url,
-            # verbose=verbose
         )
-
-        # item_pool = partial(
-        #     self.make_statement,
-        #     qid=qid,
-        #     item_label=item_label,
-        # )
 
         with ThreadPool(self.n_cores) as pool:
             # Wrap pool.imap with tqdm for progress tracking
             pool_imap = pool.imap(item_pool, item_statements.items())
             results = list(tqdm(pool_imap, total=len(item_statements.items())))
 
-        # statements = []
         for res_ in results:
             if res_ is None:
                 continue
-            self.logger.debug(f'{len(res_)=}')
             statements.extend(res_)
 
         return statements
@@ -593,13 +613,11 @@ class WikidataTextification:
 
         if not hasattr(self, 'wikidata_statements'):
             # Initialize an empty list to store the statements.
-            self.logger.debug('Creating self.wikidata_statements as []')
             self.wikidata_statements = []
 
         # Fetch and override items from Wikidata from the list of QIDs
         self.download_and_extract_items(qids)
-        self.logger.debug(f'{self.counter=}')
-        self.logger.debug(f'{len(self.items)=}')
+
         """
         # Override existing wikidata_items to minimise RAM impact
         self.wikidata_items = [] if self.items is None else self.items
@@ -610,14 +628,12 @@ class WikidataTextification:
         """
 
         # Convert each item fetched from Wikidata into statements.
-        self.logger.debug(f'{len(self.items)=}')
-
-        for wikidata_item_ in self.items:  # self.wikidata_items:
-            self.wikidata_statements.extend(
-                self.convert_wikidata_item_to_statements(
+        if self.version == 0:
+            for wikidata_item_ in self.items:  # self.wikidata_items:
+                statements_ = self.convert_wikidata_item_to_statements(
                     item_json=wikidata_item_
                 )
-            )
+                self.wikidata_statements.extend(statements_)
 
         # Return the statements either as a list or as a concatenated string,
         #   based on the return_list flag.
@@ -625,3 +641,8 @@ class WikidataTextification:
             self.wikidata_statements = '\n'.join(
                 [wds_['statement'] for wds_ in self.wikidata_statements]
             ).replace('\n\n', '\n')
+
+        self.df_vecdb = pd.DataFrame(self.wikidata_statements)
+
+        if self.save_filename is not None:
+            self.df_vecdb.to_csv(self.save_filename)
