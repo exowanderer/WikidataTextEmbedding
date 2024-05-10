@@ -98,13 +98,6 @@ class WikidataTextification:
         Returns:
             tuple: A tuple containing the JSON data and the final URL used for the API request.
         """
-        # if thing_id in master_cache.keys():
-        #     return master_cache[thing_id]
-        self.logger.debug([
-            f'{thing_id=}',
-            f'{thing=}',
-            f'{key=}'
-        ])
         user_agent = 'CoolBot/0.0 (https://example.org/coolbot/; coolbot@example.org)'
 
         headers = {
@@ -116,12 +109,10 @@ class WikidataTextification:
         #   the last 3 characters.
         api_url = self.WIKIDATA_API_URL
         api_url = api_url[:-3] if api_url[:-3] == 'wiki' else api_url
-        self.logger.debug(f'{api_url=}')
 
         # Construct the URL for the API request.
         entity_restapi = 'rest.php/wikibase/v0/entities'
         thing_url = '/'.join([api_url, entity_restapi, thing, thing_id])
-        self.logger.debug(f'{thing_url=}')
 
         # Add additional parts to the URL if 'key' and 'lang' are specified.
         if key is not None:
@@ -130,15 +121,14 @@ class WikidataTextification:
             if self.lang is not None:
                 thing_url = '/'.join([thing_url, self.lang])
 
-        self.logger.debug(f'{thing_url=}')
-
-        counter = 0  # Initialize a counter for tracking attempts.
-        while True:
+        for counter in range(self.timeout):
             if 'items//' in thing_url:
+                if self.verbose:
+                    self.logger.debug("'items//' in thing_url")
                 # Return empty result if the URL is malformed.
-                self.thing_data = {}
-                self.thing_url = thing_url
-                return  # {}, thing_url
+                # self.thing_data = {}
+                # self.thing_url = thing_url
+                return {}, thing_url
 
             try:
                 # Open the URL and read the response.
@@ -147,76 +137,65 @@ class WikidataTextification:
                         j_inn.headers[key] = val
 
                     get_code = j_inn.getcode()
-                    self.logger.debug(f'{get_code=}')
 
-                    # self.logger.debug([thing_id, thing, get_code])
                     if get_code != self.GET_SUCCESS:
                         self.logger.debug([thing_id, thing, get_code])
-                        self.thing_data = {}
-                        self.thing_url = thing_url
-                        return  # {}, thing_url
+                        # self.thing_data = {}
+                        # self.thing_url = thing_url
+                        return {}, thing_url
 
                     # Decode and parse the JSON data
                     self.thing_data = j_inn.read().decode('utf-8')
-                    self.logger.debug(f'{len(self.thing_data)=}')
+                    self.thing_data = json.loads(self.thing_data)
 
                 # Parse the JSON data and return it along with the URL.
                 # json_data = json.loads(j_inn_text)
-                self.logger.debug(f'{len(self.thing_data)=}')
                 itemnotfound = 'item-not-found'
 
                 is_found = False
+                is_dict = isinstance(self.thing_data, dict)
                 code_in_jdata = 'code' in self.thing_data
-                if code_in_jdata:
+                if is_dict and code_in_jdata:
                     is_found = itemnotfound in self.thing_data['code']
+
                 if code_in_jdata and is_found:
                     self.logger.debug(
                         'code in json_data and '
                         'itemnotfound in json_data["code"]'
                     )
 
-                    self.thing_data = {}
-                    self.thing_url = thing_url
-                    return  # {}, thing_url
+                    # self.thing_data = {}
+                    # self.thing_url = thing_url
+                    return {}, thing_url
 
-                # return json.loads(j_inn_text), thing_url
-                self.thing_data = self.thing_data
-                self.thing_url = thing_url
-                self.logger.debug(f'{len(self.thing_data)=}')
+                return self.thing_data, thing_url
 
             except urllib.error.HTTPError as e:
                 if self.verbose:
+                    self.logger.debug('urllib.error.HTTPError')
                     self.logger.debug(f"{e}: {thing_id} {thing}")
 
-                self.thing_data = {}
-                self.thing_url = thing_url
-                return  # {}, thing_url
+                return {}, thing_url
 
             except Exception as e:
                 # Log errors if verbose mode is enabled.
                 if self.verbose:
                     self.logger.debug(f"Error downloading {thing_url}: {e}")
-                    # master_cache[thing_id] = {}, thing_url
 
-                if counter == self.timeout:
-                    self.logger.debug(
-                        f"Timout({counter}) reached; Error downloading "
-                    )
-                    self.logger.debug(f"{thing}:{thing_id}:{key}:{thing_url}")
-                    self.logger.debug(f"Error: {e}")
+            if counter + 1 == self.timeout:
+                self.logger.debug(
+                    f"Timout({counter}) reached; Error downloading "
+                )
+                self.logger.debug(f"{thing}:{thing_id}:{key}:{thing_url}")
 
-                    self.thing_data = {}
-                    self.thing_url = thing_url
-                    return  # {}, thing_url
+                return {}, thing_url
 
-            counter = counter + 1  # Increment the counter for each attempt.
+            # counter = counter + 1  # Increment the counter for each attempt.
 
         # Log if the function exits the loop without returning.
         self.logger.debug("End up with None-thing")
 
-        self.thing_data = {}
-        self.thing_url = thing_url
-        return  # {}, thing_url
+        return {}, thing_url
 
     def get_item_from_wikidata(self, qid, key=None, verbose=False):
         """
@@ -230,23 +209,22 @@ class WikidataTextification:
             tuple: A tuple containing the item JSON data and the URL used for the API request.
         """
 
-        self.item_json = None
-        self.item_url = None
-
         # Fetch JSON data from Wikidata using the general-purpose
         #   function get_json_from_wikidata.
-        self.get_json_from_wikidata(
+        item_json, item_url = self.get_json_from_wikidata(
             thing_id=qid,
             thing='items',
             key=key,
         )
 
-        self.item_json = self.thing_data
-        self.item_url = self.thing_url
+        # if isinstance(self.thing_data, str):
+        #     logger.debug(f'{self.thing_data=}')
 
         # If the JSON data is not empty, return it along with the URL.
-        if not len(self.item_json):
-            self.item_json = {}
+        if not len(item_json):
+            item_json = {}
+
+        return item_json, item_url
 
     def get_property_from_wikidata(self, pid, key=None):
         """
@@ -261,17 +239,19 @@ class WikidataTextification:
         """
         # Fetch JSON data from Wikidata using the general-purpose
         #   function get_json_from_wikidata.
-        self.get_json_from_wikidata(
+        property_json, property_url = self.get_json_from_wikidata(
             thing_id=pid,
             thing='properties',
             key=key,
         )
-        self.property_json = self.thing_data
-        self.property_url = self.thing_url
+        # self.property_json = self.thing_data
+        # self.property_url = self.thing_url
 
         # If the JSON data is not empty, return it along with the URL.
-        if not len(self.property_json):
-            self.property_json = {}
+        if not len(property_json):
+            property_json = {}
+
+        return property_json, property_url
 
     def download_and_extract_items(self, qids):
         """
@@ -283,6 +263,7 @@ class WikidataTextification:
         Returns:
             list: A list of dictionaries containing item information extracted from each URL.
         """
+
         if not hasattr(self, 'items'):
             # Initialize an empty list to hold item information.
             self.items = []
@@ -296,35 +277,45 @@ class WikidataTextification:
         for qid_ in qids:
             try:
                 # Fetch item JSON data from Wikidata using the QID.
-                self.get_item_from_wikidata(qid=qid_)
-
+                # self.logger.debug('1 download_and_extract_items')
+                item_json, item_url = self.get_item_from_wikidata(qid=qid_)
+                # self.logger.debug('2 download_and_extract_items')
                 # Skip processing if no item data is found.
-                if len(self.item_json) == 0:
+                if len(item_json) == 0:
+                    # self.logger.debug('2a download_and_extract_items')
+                    if self.verbose:
+                        self.logger.debug('len(item_json) == 0')
                     continue
 
+                # self.logger.debug('3 download_and_extract_items')
                 # Append a dictionary with item details to the items list.
                 self.items.append({
                     'html_url': qid_,  # Wikidata URL.
-                    'item_url': self.item_url,  # API URL to fetch the item.
+                    'item_url': item_url,  # API URL to fetch the item.
                     # item data extracted from response.
-                    'item_data': self.item_json,
+                    'item_data': item_json,
                 })
 
+                # self.logger.debug('4 download_and_extract_items')
+                """
                 # TODO: Test including statement builder in download method
                 # Override existing wikidata_items to minimise RAM impact
                 self.wikidata_items = [] if self.items is None else self.items
-
+                self.logger.debug('5 download_and_extract_items')
                 if not hasattr(self, 'wikidata_statements'):
                     # Initialize an empty list to store the statements.
+                    self.logger.debug('5b creating self.wikidata_statements')
                     self.wikidata_statements = []
-
+                self.logger.debug('6 download_and_extract_items')
                 # Convert each item fetched from Wikidata into statements.
-                for wikidata_item_ in self.wikidata_items:
-                    self.wikidata_statements.extend(
-                        self.convert_wikidata_item_to_statements(
-                            item_json=self.item_json
-                        )
+                # for wikidata_item_ in self.wikidata_items:
+                self.wikidata_statements.extend(
+                    self.convert_wikidata_item_to_statements(
+                        item_json=self.item_json
                     )
+                )
+                """
+                # self.logger.debug('7 download_and_extract_items')
 
             except Exception as e:
                 # Log any exceptions that occur during processing.
@@ -385,16 +376,16 @@ class WikidataTextification:
         #   updating the property label accordingly.
         if wikidata_data_type == 'wikibase-item':
             # Fetching the item JSON for the value if it's a Wikibase item.
-            self.get_item_from_wikidata(
+            value_content, _ = self.get_item_from_wikidata(
                 qid=value,
                 key='labels',
             )
-            self.value_content = self.item_json
+            # self.value_content = value_content
 
         elif wikidata_data_type == 'time':
             value_content = self.check_and_return_value(value, 'time')
-            assert (not isinstance(value_content, list)
-                    ), f'value_content is a list'
+            assert not isinstance(
+                value_content, list), f'value_content is a list'
             property_label = (
                 f'has more information to be found at the {property_label}'
             )
@@ -410,7 +401,12 @@ class WikidataTextification:
             )
 
         elif wikidata_data_type == 'url':
-            property_label = property_label.replace(' ', '_')
+            try:
+                property_label = property_label.replace(' ', '_')
+            except Exception as e:
+                self.logger.debug(
+                    f'{e}: {type(property_label)}: {property_label}')
+
             property_label = (
                 f'has more information to be found at {property_label}'
             )
@@ -434,12 +430,6 @@ class WikidataTextification:
             )
 
         # elif wikidata_data_type == 'English':
-        #     # self.logger.debug([
-        #           wikidata_data_type,
-        #           item_label,
-        #           property_label,
-        #           value
-        #     ])
         #     value_content = value['text']
         #     property_label = (
         #         f'has the {lang_} monolingual text identifier'
@@ -480,7 +470,7 @@ class WikidataTextification:
         pid, properties = prop_input  # Unpacking the property ID and properties.
 
         # Fetching the property label from Wikidata.
-        self.get_property_from_wikidata(pid, key='labels')
+        property_label, _ = self.get_property_from_wikidata(pid, key='labels')
 
         if len(property_label) == 0:
             return []  # Skip this one
@@ -502,10 +492,11 @@ class WikidataTextification:
             try:
                 # Constructing the statement text.
                 statement_ = ' '.join(
-                    [item_label, property_label, value_content])
+                    [item_label, property_label, value_content]
+                )
 
-                # if verbose:
-                #     self.logger.debug(statement_)
+                if self.verbose:
+                    self.logger.debug(statement_)
 
             except Exception as e:
                 # Logging any exceptions.
@@ -557,8 +548,8 @@ class WikidataTextification:
         # Constructing an initial statement describing the item.
         desc_statement = f'{item_label} can be described as {item_desc}'
         desc_embedding = None
-        if embedder is not None:
-            desc_embedding = embedder.encode(desc_statement)
+        if self.embedder is not None:
+            desc_embedding = self.embedder.encode(desc_statement)
 
         statements = [{
             'qid': qid,
@@ -577,8 +568,19 @@ class WikidataTextification:
         item_pool = partial(
             self.make_statement,
             qid=qid,
+            # embedder=embedder,
             item_label=item_label,
+            # lang=lang,
+            # timeout=timeout,
+            # api_url=api_url,
+            # verbose=verbose
         )
+
+        # item_pool = partial(
+        #     self.make_statement,
+        #     qid=qid,
+        #     item_label=item_label,
+        # )
 
         with ThreadPool(self.n_cores) as pool:
             # Wrap pool.imap with tqdm for progress tracking
