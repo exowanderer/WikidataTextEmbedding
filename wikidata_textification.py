@@ -125,9 +125,8 @@ class WikidataTextification:
             if 'items//' in thing_url:
                 if self.verbose:
                     self.logger.debug("'items//' in thing_url")
+
                 # Return empty result if the URL is malformed.
-                # self.thing_data = {}
-                # self.thing_url = thing_url
                 return {}, thing_url
 
             try:
@@ -140,8 +139,8 @@ class WikidataTextification:
 
                     if get_code != self.GET_SUCCESS:
                         self.logger.debug([thing_id, thing, get_code])
-                        # self.thing_data = {}
-                        # self.thing_url = thing_url
+
+                        # Return empty result if the URL is malformed.
                         return {}, thing_url
 
                     # Decode and parse the JSON data
@@ -149,7 +148,6 @@ class WikidataTextification:
                     self.thing_data = json.loads(self.thing_data)
 
                 # Parse the JSON data and return it along with the URL.
-                # json_data = json.loads(j_inn_text)
                 itemnotfound = 'item-not-found'
 
                 is_found = False
@@ -164,8 +162,7 @@ class WikidataTextification:
                         'itemnotfound in json_data["code"]'
                     )
 
-                    # self.thing_data = {}
-                    # self.thing_url = thing_url
+                    # Return empty result if the URL is malformed.
                     return {}, thing_url
 
                 return self.thing_data, thing_url
@@ -244,8 +241,6 @@ class WikidataTextification:
             thing='properties',
             key=key,
         )
-        # self.property_json = self.thing_data
-        # self.property_url = self.thing_url
 
         # If the JSON data is not empty, return it along with the URL.
         if not len(property_json):
@@ -265,57 +260,43 @@ class WikidataTextification:
         """
 
         if not hasattr(self, 'items'):
-            # Initialize an empty list to hold item information.
             self.items = []
 
+        self.counter = 0
         # Construct the base URL for item QIDs.
         qid_base = f'{self.WIKIDATA_UI_URL}/Q'
 
         if not isinstance(qids, (list, tuple, ndarray)):
             qids = list(qids)
 
-        for qid_ in qids:
+        for k, qid_ in enumerate(qids):
             try:
+                # self.logger.debug(f'download_and_extract_items {k}: {qid_}')
                 # Fetch item JSON data from Wikidata using the QID.
-                # self.logger.debug('1 download_and_extract_items')
                 item_json, item_url = self.get_item_from_wikidata(qid=qid_)
-                # self.logger.debug('2 download_and_extract_items')
+
                 # Skip processing if no item data is found.
                 if len(item_json) == 0:
-                    # self.logger.debug('2a download_and_extract_items')
                     if self.verbose:
                         self.logger.debug('len(item_json) == 0')
                     continue
 
-                # self.logger.debug('3 download_and_extract_items')
-                # Append a dictionary with item details to the items list.
-                self.items.append({
+                item = {
                     'html_url': qid_,  # Wikidata URL.
                     'item_url': item_url,  # API URL to fetch the item.
                     # item data extracted from response.
                     'item_data': item_json,
-                })
+                }
 
-                # self.logger.debug('4 download_and_extract_items')
-                """
-                # TODO: Test including statement builder in download method
-                # Override existing wikidata_items to minimise RAM impact
-                self.wikidata_items = [] if self.items is None else self.items
-                self.logger.debug('5 download_and_extract_items')
-                if not hasattr(self, 'wikidata_statements'):
-                    # Initialize an empty list to store the statements.
-                    self.logger.debug('5b creating self.wikidata_statements')
-                    self.wikidata_statements = []
-                self.logger.debug('6 download_and_extract_items')
+                # Append a dictionary with item details to the items list.
+                self.items.append(item)
+
+                # self.logger.debug(f'{len(self.wikidata_statements)=}')
                 # Convert each item fetched from Wikidata into statements.
-                # for wikidata_item_ in self.wikidata_items:
-                self.wikidata_statements.extend(
-                    self.convert_wikidata_item_to_statements(
-                        item_json=self.item_json
-                    )
-                )
-                """
-                # self.logger.debug('7 download_and_extract_items')
+                # self.wikidata_statements.extend(
+                #     self.convert_wikidata_item_to_statements(item_json=item)
+                # )
+                # self.logger.debug(f'{len(self.wikidata_statements)=}')
 
             except Exception as e:
                 # Log any exceptions that occur during processing.
@@ -380,7 +361,6 @@ class WikidataTextification:
                 qid=value,
                 key='labels',
             )
-            # self.value_content = value_content
 
         elif wikidata_data_type == 'time':
             value_content = self.check_and_return_value(value, 'time')
@@ -467,7 +447,9 @@ class WikidataTextification:
         Returns:
             list: A list of dictionaries containing statement information.
         """
-        pid, properties = prop_input  # Unpacking the property ID and properties.
+        self.counter = self.counter + 1
+        # Unpacking the property ID and properties.
+        pid, properties = prop_input
 
         # Fetching the property label from Wikidata.
         property_label, _ = self.get_property_from_wikidata(pid, key='labels')
@@ -564,6 +546,8 @@ class WikidataTextification:
 
         # Processing each statement associated with the item in parallel.
         item_statements = item_json['item_data']['statements']
+        self.logger.debug(f'{len(item_statements)=}')
+        self.logger.debug(f'{len(self.wikidata_statements)=}')
 
         item_pool = partial(
             self.make_statement,
@@ -591,7 +575,7 @@ class WikidataTextification:
         for res_ in results:
             if res_ is None:
                 continue
-
+            self.logger.debug(f'{len(res_)=}')
             statements.extend(res_)
 
         return statements
@@ -607,18 +591,28 @@ class WikidataTextification:
             list or str: A list of statements if return_list is True; otherwise, a string of concatenated statements.
         """
 
+        if not hasattr(self, 'wikidata_statements'):
+            # Initialize an empty list to store the statements.
+            self.logger.debug('Creating self.wikidata_statements as []')
+            self.wikidata_statements = []
+
         # Fetch and override items from Wikidata from the list of QIDs
         self.download_and_extract_items(qids)
-
+        self.logger.debug(f'{self.counter=}')
+        self.logger.debug(f'{len(self.items)=}')
+        """
         # Override existing wikidata_items to minimise RAM impact
         self.wikidata_items = [] if self.items is None else self.items
 
         if not hasattr(self, 'wikidata_statements'):
             # Initialize an empty list to store the statements.
             self.wikidata_statements = []
+        """
 
         # Convert each item fetched from Wikidata into statements.
-        for wikidata_item_ in self.wikidata_items:
+        self.logger.debug(f'{len(self.items)=}')
+
+        for wikidata_item_ in self.items:  # self.wikidata_items:
             self.wikidata_statements.extend(
                 self.convert_wikidata_item_to_statements(
                     item_json=wikidata_item_
