@@ -17,7 +17,7 @@ verbose = False
 wikidata_base = '"wikidata.org"'
 return_list = True
 version = 1
-n_qids = 0  # number of QIDs to embed
+n_qids = 100  # number of QIDs to embed
 
 # List of the first `n_qids` QIDs
 qids = [f'Q{k+1}' for k in range(n_qids)]
@@ -31,7 +31,7 @@ if 'embedder' not in locals():
 logger = WikidataTextification.get_logger(__name__)
 
 timeout = 1
-n_qids = 100  # number of QIDs to embed
+n_qids = 1000  # number of QIDs to embed
 qids = [f'Q{k+1}' for k in range(n_qids)]
 save_filename = f'wikidata_vectordb_first_{n_qids}_{lang}.csv'
 
