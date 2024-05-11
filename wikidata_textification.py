@@ -326,6 +326,19 @@ class WikidataTextification:
                         item_json=item
                     )
                     self.wikidata_statements.extend(statements_)
+
+                    # Create or Add DataFrame
+                    if not hasattr(self, 'df_vecdb') or len(self.df_vecdb) == 0:
+                        self.logger.debug('Creating self.df_vecdb')
+                        self.df_vecdb = pd.DataFrame(statements_)
+                    else:
+                        self.logger.debug('Appending self.df_vecdb')
+                        self.df_vecdb = pd.concat([
+                            self.df_vecdb, pd.DataFrame(statements_)
+                        ]).reset_index(drop=True)
+
+                    self.logger.debug(f'{self.df_vecdb.shape}')
+
                 # self.wikidata_statements.extend(
                 #     self.convert_wikidata_item_to_statements(item_json=item)
                 # )
@@ -617,6 +630,9 @@ class WikidataTextification:
             # Initialize an empty list to store the statements.
             self.wikidata_statements = []
 
+        if not hasattr(self, 'df_vecdb'):
+            self.df_vecdb = pd.DataFrame()
+
         # Fetch and override items from Wikidata from the list of QIDs
         self.download_and_extract_items(qids)
 
@@ -637,14 +653,23 @@ class WikidataTextification:
                 )
                 self.wikidata_statements.extend(statements_)
 
+                # Create or Add DataFrame
+                if not hasattr(self, 'df_vecdb') or len(self.df_vecdb) == 0:
+                    self.logger.debug('Creating self.df_vecdb')
+                    self.df_vecdb = pd.DataFrame(statements_)
+                else:
+                    self.logger.debug('Appending self.df_vecdb')
+                    self.df_vecdb = pd.concat([
+                        self.df_vecdb, pd.DataFrame(statements_)
+                    ]).reset_index(drop=True)
+                self.logger.debug(f'{self.df_vecdb.shape}')
+
         # Return the statements either as a list or as a concatenated string,
         #   based on the return_list flag.
         if not self.return_list:
             self.wikidata_statements = '\n'.join(
                 [wds_['statement'] for wds_ in self.wikidata_statements]
             ).replace('\n\n', '\n')
-
-        self.df_vecdb = pd.DataFrame(self.wikidata_statements)
 
         if self.save_filename is not None:
             self.df_vecdb.to_csv(self.save_filename)
