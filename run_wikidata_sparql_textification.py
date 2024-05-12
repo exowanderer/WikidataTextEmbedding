@@ -1,3 +1,14 @@
+"""python
+pip install -U sentence-transformers
+pip install requests  # google-search-results beautifulsoup4
+# !pip install langchain_community langchain
+"""
+
+from multiprocessing import cpu_count
+from sentence_transformers import SentenceTransformer
+from time import time
+
+from wikidata_sparql_textification import WikidataTextification
 
 if __name__ == '__main__':
     if 'embedder' not in locals():
@@ -7,7 +18,7 @@ if __name__ == '__main__':
         )
 
     lang = 'en'
-    timeout = 10
+    timeout = 1
     n_cores = cpu_count()
     verbose = False
     wikidata_base = '"wikidata.org"'
@@ -40,8 +51,8 @@ if __name__ == '__main__':
 
         has_vecdb = hasattr(wd_textification, 'df_vecdb')
         if has_vecdb:
-            len_unique_qids = len(wd_textification.df_vecdb.qid.unique())
-            has_all_qids = len(qids) != len_unique_qids
+            len_qids_processed = len(wd_textification.qids_processed)
+            has_all_qids = len(qids) == len_qids_processed
 
     print(f'Operation took {time() - start}')
     print(wd_textification.df_vecdb)
