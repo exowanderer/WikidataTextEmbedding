@@ -42,17 +42,18 @@ if __name__ == '__main__':
     )
 
     start = time()
-    has_all_qids = False  # Start as do_while
-    while not has_all_qids:
-        try:
-            wd_textification.create_vecdb(qids)
-        except Exception as e:
-            print(f'Error: {e}')
+    wd_textification.create_vecdb(qids)
+    # has_all_qids = False  # Start as do_while
+    # while not has_all_qids:
+    #     try:
+    #         wd_textification.create_vecdb(qids)
+    #     except Exception as e:
+    #         print(f'Error: {e}')
 
-        has_vecdb = hasattr(wd_textification, 'df_vecdb')
-        if has_vecdb:
-            len_qids_processed = len(wd_textification.qids_processed)
-            has_all_qids = len(qids) == len_qids_processed
+    #     has_vecdb = hasattr(wd_textification, 'df_vecdb')
+    #     if has_vecdb:
+    #         len_qids_processed = len(wd_textification.qids_processed)
+    #         has_all_qids = len(qids) == len_qids_processed
 
     print(f'Operation took {time() - start}')
     print(wd_textification.df_vecdb)

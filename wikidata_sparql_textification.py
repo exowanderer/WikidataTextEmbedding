@@ -92,7 +92,7 @@ class WikidataTextification:
 
         self.headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Basic {self.WIKIMEDIA_TOKEN}'
+            'Authorization': f'Bearer {self.WIKIMEDIA_TOKEN}'
         }
 
         self.GET_SUCCESS = 200
@@ -130,7 +130,7 @@ class WikidataTextification:
 
         self.headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Basic {self.WIKIMEDIA_TOKEN}'
+            'Authorization': f'Bearer {self.WIKIMEDIA_TOKEN}'
         }
 
         # TODO adjust user agent; see https://w.wiki/CX6
@@ -250,49 +250,34 @@ class WikidataTextification:
         has_df_vecdb = hasattr(self, 'df_vecdb')
 
         if has_df_vecdb:
-            if qid_ in self.df_vecdb.qid.unique():
-                return
+            if 'qid' in self.df_vecdb.columns:
+                if qid_ in self.df_vecdb.qid.unique():
+                    return
 
         # self.logger.debug(f'{qid_=}')
         sparql_result = self.get_results(self.get_sparql_query(qid_))
         df_item = self.sparql_to_dataframe(sparql_result)
 
-        return self.item_to_vecdb(qid_, df_item)
-        # df_ = self.item_to_vecdb(qid_, df_item)
+        df_ = self.item_to_vecdb(qid_, df_item)
 
-        # if not hasattr(self, 'df_vecdb'):  # or len(self.df_vecdb)
-        #     self.df_vecdb = df_
-        # else:
-        #     self.df_vecdb = pd.concat([
-        #         self.df_vecdb, df_
-        #     ]).reset_index(drop=True)
+        if not hasattr(self, 'df_vecdb'):  # or len(self.df_vecdb)
+            self.df_vecdb = df_
+        else:
+            self.df_vecdb = pd.concat([
+                self.df_vecdb, df_
+            ]).reset_index(drop=True)
 
-        # self.qids_processed.append(qid_)
+        self.qids_processed.append(qid_)
 
     def create_vecdb(self, qids):
-        # results = []
         # for qid_ in tqdm(qids):
-        #     self.process_qid(qid_)
-
         with ThreadPool(self.n_cores) as pool:
-            # Wrap pool.imap with tqdm for progress tracking
-            pool_imap = pool.imap(self.process_qid, qids)
+            pool_imap = pool.starmap(self.process_qid, zip(qids))
             results = list(tqdm(pool_imap, total=len(qids)))
-
-            # pool_imap = pool.starmap(self.process_qid, zip(qids))
-            # results = list(tqdm(pool_imap, total=len(qids)))
             #     # Wrap pool.imap with tqdm for progress tracking
             #     pool_imap = pool.starmap(item_pool, zip(df_item_rows))
             #     # results = list(tqdm(pool_imap, total=len(df_item_rows)))
             #     results = list(pool_imap)
-
-        for res_ in results:
-            if not hasattr(self, 'df_vecdb'):  # or len(self.df_vecdb)
-                self.df_vecdb = res_
-            else:
-                self.df_vecdb = pd.concat([
-                    self.df_vecdb, res_
-                ]).reset_index(drop=True)
 
         if self.save_filename is not None:
             self.df_vecdb.to_csv(self.save_filename)

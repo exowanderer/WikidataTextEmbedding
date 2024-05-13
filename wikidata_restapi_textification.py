@@ -99,7 +99,7 @@ class WikidataTextification:
 
         self.headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Basic {self.WIKIMEDIA_TOKEN}'
+            'Authorization': f'Bearer {self.WIKIMEDIA_TOKEN}'
         }
 
         self.GET_SUCCESS = 200
