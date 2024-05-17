@@ -6,13 +6,15 @@ import requests
 import urllib  # For opening and reading URLs.
 import sys
 
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 from time import time
 from tqdm import tqdm
 from urllib.request import urlopen
 
 try:
-    from google.colab import userdata
+    from google.colab import userdata, drive
+    drive.mount('/content/drive')
+
     USE_LOCAL = False
 except Exception as e:
     print('USE_LOCAL = True')
@@ -40,13 +42,6 @@ def embedd_jina_api(statement):
     return json.loads(
         response.content.decode('utf-8')
     )['data'][0]['embedding']
-
-
-if 'embedder' not in locals():
-    embedder = SentenceTransformer(
-        "jinaai/jina-embeddings-v2-base-en",
-        trust_remote_code=True
-    )
 
 
 class WikidataRESTAPI:
@@ -279,7 +274,16 @@ class WikidataRESTAPI:
         return property_json  # , property_url
 
 
-def entity_to_statements(entity):
+def entity_to_statements(
+        entity, do_grab_proplabel=False, lang='en',
+        do_grab_valuelabel=False):
+
+    if lang not in entity['descriptions'].keys():
+        return []
+
+    qid_ = entity['id']
+    item_desc = entity['descriptions'][lang]['value']
+
     dict_list = []
     for prop_claims_ in entity['claims'].items():  # tqdm(
 
@@ -288,12 +292,6 @@ def entity_to_statements(entity):
 
             # print(claim_['mainsnak']['datavalue']['value'])
             # print(claim_['mainsnak'].keys())
-
-            if 'en' not in entity['descriptions'].keys():
-                continue
-
-            # n_has_en_desc = n_has_en_desc + 1
-            item_desc = entity['descriptions']['en']['value']
 
             value_ = None  # Default to None
             statement_ = None  # Default to None
@@ -347,9 +345,8 @@ def entity_to_statements(entity):
 
 
 def stream_etl_wikidata_datadump(
-        wikidata_datadump_path,
-        do_grab_proplabel=False,
-        do_grab_valuelabel=False):
+        in_filepath, fout, lang='en', do_grab_proplabel=False,
+        do_grab_valuelabel=False, qids_only=False):
 
     n_attempts = n_attempts if 'n_attempts' in locals() else 0
     n_statements = n_statements if 'n_statements' in locals() else 0
@@ -357,7 +354,7 @@ def stream_etl_wikidata_datadump(
     # n_has_datavalue = n_has_datavalue if 'n_has_datavalue' in locals() else 0
     # n_has_en_desc = n_has_en_desc if 'n_has_en_desc' in locals() else 0
 
-    with urlopen(wikidata_datadump_path) as stream:
+    with urlopen(in_filepath) as stream:
         with bz2.BZ2File(stream) as file:
             pbar = tqdm(enumerate(file))
             for k_iter, line in pbar:
@@ -398,32 +395,105 @@ def stream_etl_wikidata_datadump(
                     continue
 
                 # n_has_sitelinks = n_has_sitelinks + 1
+                if qids_only:
+                    if lang not in entity['descriptions'].keys():
+                        continue
 
-                qid_ = entity['id']
+                    qid_ = entity['id']
+                    item_desc = entity['descriptions'][lang]['value']
+                    fout.write(f'{qid_},{item_desc}\n')
+                    n_statements = n_statements + 1
+                    continue
 
                 # dict_vecdb.append(vecdb_line_)
-                dict_list = entity_to_statements(entity)
+                dict_list = entity_to_statements(
+                    entity,
+                    lang=lang,
+                    do_grab_proplabel=do_grab_proplabel,
+                    do_grab_valuelabel=do_grab_valuelabel
+                )
+
                 for dict_ in dict_list:
-                    fout.write(str(dict_))
+                    fout.write(f'{dict_}\n')
 
                 n_statements = n_statements + len(dict_list)
+
+
+# if 'embedder' not in locals():
+#     embedder = SentenceTransformer(
+#         "jinaai/jina-embeddings-v2-base-en",
+#         trust_remote_code=True
+#     )
+
+def confirm_overwrite(filepath):
+    print(f'File exists: {filepath}')
+    confirm = input("Confirm overwrite (y/[n])?: ")
+
+    while True:
+
+        if confirm.upper() == "Y":
+            print(f"\nOverwriting file {filepath}\n")
+            return True
+
+        elif confirm.upper() == "N" or confirm == '':
+            print(
+                "File not selected for overwrite. Please change output filename"
+            )
+            return False
+        else:
+            print(f'Input unrecognised. Please enter `y` or `n`')
+            confirm = input("Confirm overwrite (y/[n])?: ")
+
+
+def process_wikidata_dump(
+        out_filepath, in_filepath, lang='en', do_grab_proplabel=False,
+        do_grab_valuelabel=False, qids_only=False):
+
+    full_header = (
+        'qid,pid,value,'
+        'item_label,property_label,value_content,'
+        'statement,embedding\n'
+    )
+
+    if not confirm_overwrite(out_filepath):
+        sys.exit()
+
+    with open(out_filepath, 'w') as fout:
+        header = 'qid,label\n' if qids_only else full_header
+        fout.write(header)
+
+    with open(out_filepath, 'a') as fout:
+        stream_etl_wikidata_datadump(
+            in_filepath=in_filepath,
+            fout=fout,
+            lang=lang,
+            do_grab_proplabel=do_grab_proplabel,
+            do_grab_valuelabel=do_grab_valuelabel,
+            qids_only=qids_only
+        )
 
 
 wikidata_datadump_path = (
     'https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2'
 )
 
-outfilename = 'wikidata_vectordb_datadump_XYZ_en.csv'
+out_filedir = './' if USE_LOCAL else '/content/drive/'
+out_filename = 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
+out_filepath = os.path.join(out_filedir, out_filename)
 
-# wdrest = WikidataRESTAPI()
-# dict_vecdb = dict_vecdb if 'dict_vecdb' in locals() else []
+lang = 'en'
+do_grab_proplabel = False
+do_grab_valuelabel = False
+qids_only = True
 
-with open(outfilename, 'a') as fout:  # ,newline=''
-    stream_etl_wikidata_datadump(
-        wikidata_datadump_path,
-        do_grab_proplabel=False,
-        do_grab_valuelabel=False
-    )
+process_wikidata_dump(
+    out_filepath=out_filepath,
+    in_filepath=wikidata_datadump_path,
+    lang=lang,
+    do_grab_proplabel=do_grab_proplabel,
+    do_grab_valuelabel=do_grab_valuelabel,
+    qids_only=qids_only
+)
 
 """
 Experiment Log: Stardate 2024.134
