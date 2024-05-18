@@ -4,6 +4,7 @@ import logging
 import os
 import requests
 import urllib  # For opening and reading URLs.
+import subprocess
 import sys
 
 # from sentence_transformers import SentenceTransformer
@@ -394,13 +395,21 @@ def stream_etl_wikidata_datadump(
                 if 'sitelinks' not in entity.keys():
                     continue
 
+                if lang not in entity['descriptions'].keys():
+                    continue
+
+                qid_ = entity['id']
+                print(f'Checking if {qid_}, in {fout.name}')
+                check_ = grep_string_in_file(f'{qid_},', fout.name)
+                print(f"{check_=}")
+                if grep_string_in_file(f'{qid_},', fout.name):
+                    # Skip if QID already exists in the file
+                    continue
+
+                item_desc = entity['descriptions'][lang]['value']
+
                 # n_has_sitelinks = n_has_sitelinks + 1
                 if qids_only:
-                    if lang not in entity['descriptions'].keys():
-                        continue
-
-                    qid_ = entity['id']
-                    item_desc = entity['descriptions'][lang]['value']
                     fout.write(f'{qid_},{item_desc}\n')
                     n_statements = n_statements + 1
                     continue
@@ -419,11 +428,24 @@ def stream_etl_wikidata_datadump(
                 n_statements = n_statements + len(dict_list)
 
 
-# if 'embedder' not in locals():
-#     embedder = SentenceTransformer(
-#         "jinaai/jina-embeddings-v2-base-en",
-#         trust_remote_code=True
-#     )
+def grep_string_in_file(search_string, file_path):
+    try:
+        # Using subprocess.check_output to run grep command
+        output = subprocess.check_output(
+            ['grep', '-q', search_string, file_path],
+            stderr=subprocess.STDOUT
+        )
+        print(f'{output=}')
+        return True
+    except subprocess.CalledProcessError as e:
+        # grep returns a non-zero exit status if the string is not found
+        if e.returncode == 1:
+            return False
+        else:
+            # Re-raise the exception if it's not the expected
+            #   'not found' exit status
+            raise e
+
 
 def confirm_overwrite(filepath):
     print(f'File exists: {filepath}')
@@ -455,8 +477,9 @@ def process_wikidata_dump(
         'statement,embedding\n'
     )
 
-    if not confirm_overwrite(out_filepath):
-        sys.exit()
+    if os.path.exists(out_filepath):
+        if not confirm_overwrite(out_filepath):
+            sys.exit()
 
     with open(out_filepath, 'w') as fout:
         header = 'qid,label\n' if qids_only else full_header
@@ -473,32 +496,39 @@ def process_wikidata_dump(
         )
 
 
-wikidata_datadump_path = (
-    'https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2'
-)
+if __name__ == '__main__':
+    # if 'embedder' not in locals():
+    #     embedder = SentenceTransformer(
+    #         "jinaai/jina-embeddings-v2-base-en",
+    #         trust_remote_code=True
+    #     )
 
-out_filedir = './' if USE_LOCAL else '/content/drive/'
-out_filename = 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
-out_filepath = os.path.join(out_filedir, out_filename)
+    wikidata_datadump_path = (
+        'https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2'
+    )
 
-lang = 'en'
-do_grab_proplabel = False
-do_grab_valuelabel = False
-qids_only = True
+    out_filedir = './' if USE_LOCAL else '/content/drive/'
+    out_filename = 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
+    out_filepath = os.path.join(out_filedir, out_filename)
 
-process_wikidata_dump(
-    out_filepath=out_filepath,
-    in_filepath=wikidata_datadump_path,
-    lang=lang,
-    do_grab_proplabel=do_grab_proplabel,
-    do_grab_valuelabel=do_grab_valuelabel,
-    qids_only=qids_only
-)
+    lang = 'en'
+    do_grab_proplabel = False
+    do_grab_valuelabel = False
+    qids_only = True
 
-"""
-Experiment Log: Stardate 2024.134
-Counters: n_attempts 1409344 : : 1409345it [23:44, 989.07it/s] - linear
-Counters: n_attempts 636277 : : 636277it [1:20:44, 131.12it/s] - ThreadPool prop
-Counters: n_attempts 1163626 : : 1163627it [24:14, 799.98it/s] - linear again
-Counters: n_attempts 2053703 - n_statements: 22371336: : 2053703it [31:46, 1077.46it/s] - linear again
-"""
+    process_wikidata_dump(
+        out_filepath=out_filepath,
+        in_filepath=wikidata_datadump_path,
+        lang=lang,
+        do_grab_proplabel=do_grab_proplabel,
+        do_grab_valuelabel=do_grab_valuelabel,
+        qids_only=qids_only
+    )
+
+    """
+    Experiment Log: Stardate 2024.134
+    Counters: n_attempts 1409344 : : 1409345it [23:44, 989.07it/s] - linear
+    Counters: n_attempts 636277 : : 636277it [1:20:44, 131.12it/s] - ThreadPool prop
+    Counters: n_attempts 1163626 : : 1163627it [24:14, 799.98it/s] - linear again
+    Counters: n_attempts 2053703 - n_statements: 22371336: : 2053703it [31:46, 1077.46it/s] - linear again
+    """
