@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import requests
 import urllib  # For opening and reading URLs.
+import sqlite3
 import subprocess
 import sys
 
@@ -280,7 +281,7 @@ class WikidataRESTAPI:
 
 
 def entity_to_statements(
-        entity, do_grab_proplabel=False, lang='en',
+        entity, conn=None, do_grab_proplabel=False, lang='en',
         do_grab_valuelabel=False):
 
     if lang not in entity['descriptions'].keys():
@@ -314,17 +315,23 @@ def entity_to_statements(
                     if 'time' in value_:
                         value_ = value_['time']
 
-                prop_label = pid_
-                if do_grab_proplabel:
-                    prop_label = wdrest.get_property_from_wikidata(
-                        pid_,
-                        key='labels'
-                    )
-
                 value_label = value_
+                if conn is not None and value_[0] == 'Q':
+                    value_label = query_label(conn, value_, field='qid')
+
                 if do_grab_valuelabel:
                     value_label = wdrest.get_item_from_wikidata(
                         qid_,
+                        key='labels'
+                    )
+
+                prop_label = pid_
+                if conn is not None:
+                    prop_label = query_label(conn, pid_, field='pid')
+
+                if do_grab_proplabel:
+                    prop_label = wdrest.get_property_from_wikidata(
+                        pid_,
                         key='labels'
                     )
 
@@ -350,8 +357,8 @@ def entity_to_statements(
 
 
 def stream_etl_wikidata_datadump(
-        in_filepath, fout, lang='en', do_grab_proplabel=False,
-        do_grab_valuelabel=False, qids_only=False):
+        in_filepath, fout, conn=None, lang='en', n_complete=None,
+        do_grab_proplabel=False, do_grab_valuelabel=False, qids_only=False):
 
     n_attempts = n_attempts if 'n_attempts' in locals() else 0
     n_statements = n_statements if 'n_statements' in locals() else 0
@@ -359,76 +366,81 @@ def stream_etl_wikidata_datadump(
     # n_has_datavalue = n_has_datavalue if 'n_has_datavalue' in locals() else 0
     # n_has_en_desc = n_has_en_desc if 'n_has_en_desc' in locals() else 0
     print(f'Starting urlopen from {in_filepath}')
-    with urlopen(in_filepath) as stream:
-        with bz2.BZ2File(stream) as file:
-            pbar = tqdm(enumerate(file))
-            for k_iter, line in pbar:
-                pbar_desc = (
-                    f'Counters: '
-                    f'n_attempts {n_attempts}'
-                    f' - n_statements: {n_statements}'
-                    # f' - avg_time_prop: {time_to_prop / (n_statements+1)}'
-                    # f' - avg_time_item: {time_to_item / (n_statements+1)}'
-                    # f': {n_statements/(n_attempts+1):0.1f}/item'
-                    # f' - n_has_sitelinks {n_has_sitelinks}:'
-                    # f': {n_has_sitelinks/(n_statements+1)*100:0.1f}%'
-                    # f' - n_has_datavalue {n_has_sitelinks}:'
-                    # f': {n_has_datavalue/(n_statements+1)*100:0.1f}%'
-                    # f' - n_has_en_desc {n_has_sitelinks}:'
-                    # f': {n_has_en_desc/(n_statements+1)*100:0.1f}%'
-                )
+    with urlopen(in_filepath) as stream, bz2.BZ2File(stream) as file:
+        pbar = tqdm(enumerate(file))
+        for k_iter, line in pbar:
+            pbar_desc = (
+                f'Counters: '
+                f'n_attempts {n_attempts}'
+                f' - n_statements: {n_statements}'
+                # f' - avg_time_prop: {time_to_prop / (n_statements+1)}'
+                # f' - avg_time_item: {time_to_item / (n_statements+1)}'
+                # f': {n_statements/(n_attempts+1):0.1f}/item'
+                # f' - n_has_sitelinks {n_has_sitelinks}:'
+                # f': {n_has_sitelinks/(n_statements+1)*100:0.1f}%'
+                # f' - n_has_datavalue {n_has_sitelinks}:'
+                # f': {n_has_datavalue/(n_statements+1)*100:0.1f}%'
+                # f' - n_has_en_desc {n_has_sitelinks}:'
+                # f': {n_has_en_desc/(n_statements+1)*100:0.1f}%'
+            )
 
-                pbar.set_description(pbar_desc)
-                pbar.refresh()  # to show immediately the update
+            pbar.set_description(pbar_desc)
+            pbar.refresh()  # to show immediately the update
 
-                if k_iter < n_attempts:
-                    continue
+            if k_iter < n_attempts:
+                continue
 
-                n_attempts = n_attempts + 1
+            n_attempts = n_attempts + 1
+            if n_complete is not None and n_attempts > n_complete:
+                # Stop after `n_complete` items to avoid overloaded filesize
+                break
 
-                line = line.decode().strip()
+            line = line.decode().strip()
 
-                if line in {'[', ']'}:
-                    continue
+            if line in {'[', ']'}:
+                continue
 
-                if line.endswith(','):
-                    line = line[:-1]
+            if line.endswith(','):
+                line = line[:-1]
 
-                entity = json.loads(line)
+            entity = json.loads(line)
 
-                if 'sitelinks' not in entity.keys():
-                    continue
+            if 'sitelinks' not in entity.keys():
+                continue
 
-                if lang not in entity['descriptions'].keys():
-                    continue
+            if lang not in entity['descriptions'].keys():
+                continue
 
-                qid_ = entity['id']
-                """
+            qid_ = entity['id']
+            """
                 check_qid_exists = grep_string_in_file(f'{qid_},', fout.name)
                 if check_qid_exists:
                     # Skip if QID already exists in the file
                     continue
                 """
-                item_desc = entity['descriptions'][lang]['value']
+            item_desc = entity['descriptions'][lang]['value']
 
-                # n_has_sitelinks = n_has_sitelinks + 1
-                if qids_only:
-                    fout.write(f'{qid_},"{item_desc}"\n')
-                    n_statements = n_statements + 1
-                    continue
+            # n_has_sitelinks = n_has_sitelinks + 1
+            if qids_only:
+                fout.write(f'{qid_},"{item_desc}"\n')
+                n_statements = n_statements + 1
+                continue
 
-                # dict_vecdb.append(vecdb_line_)
-                dict_list = entity_to_statements(
-                    entity,
-                    lang=lang,
-                    do_grab_proplabel=do_grab_proplabel,
-                    do_grab_valuelabel=do_grab_valuelabel
-                )
+            # dict_vecdb.append(vecdb_line_)
+            dict_list = entity_to_statements(
+                entity,
+                lang=lang,
+                conn=conn,
+                do_grab_proplabel=do_grab_proplabel,
+                do_grab_valuelabel=do_grab_valuelabel
+            )
 
-                for dict_ in dict_list:
-                    fout.write(f'{dict_}\n')
+            for dict_ in dict_list:
+                line_ = ','.join([f'"{item_}"' for item in dict_.values()])
+                line_ = f'{line_}\n'
+                fout.write()
 
-                n_statements = n_statements + len(dict_list)
+            n_statements = n_statements + len(dict_list)
 
 
 def grep_string_in_file(search_string, file_path):
@@ -589,8 +601,9 @@ def get_all_pid_labels(max_pid=12727, n_cores=cpu_count()-1, filename=None):
 
 
 def process_wikidata_dump(
-        out_filepath, in_filepath, lang='en', do_grab_proplabel=False,
-        do_grab_valuelabel=False, qids_only=False):
+        out_filepath, in_filepath, db_name='wikidata_qid_labels.db', lang='en',
+        n_complete=None, do_grab_proplabel=False, do_grab_valuelabel=False,
+        qids_only=False):
 
     full_header = (
         'qid,pid,value,'
@@ -611,11 +624,13 @@ def process_wikidata_dump(
             header = 'qid,label\n' if qids_only else full_header
             fout.write(header)
 
-    with open(out_filepath, 'a') as fout:
+    with open(out_filepath, 'a') as fout, sqlite3.connect(db_name) as conn:
         stream_etl_wikidata_datadump(
             in_filepath=in_filepath,
             fout=fout,
+            conn=conn,
             lang=lang,
+            n_complete=n_complete,
             do_grab_proplabel=do_grab_proplabel,
             do_grab_valuelabel=do_grab_valuelabel,
             qids_only=qids_only
@@ -638,13 +653,24 @@ if __name__ == '__main__':
     )
 
     out_filedir = './' if USE_LOCAL else '/content/drive/'
-    out_filename = 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
+    out_filename = 'wikidata_vectordb_datadump_XYZ_en.csv'
     out_filepath = os.path.join(out_filedir, out_filename)
+
+    db_name = 'wikidata_qid_labels.db'
 
     lang = 'en'
     do_grab_proplabel = False
     do_grab_valuelabel = False
-    qids_only = True
+    qids_only = False
+    n_complete = 10
+
+    if qids_only:
+        out_filename = out_filename.replace('_XYZ_', '_qids_XYZ_')
+        # Example 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
+    if n_complete is not None:
+        out_filename = out_filename.replace('_XYZ_', f'_{n_complete}_')
+        # Example f'wikidata_vectordb_datadump_qids_{n_complete}_en.csv'
+
     """
     pid_labels_filename = 'wikidata_vectordb_datadump_qids_12723_en.csv'
     df_pid_labels = get_all_pid_labels(
@@ -656,6 +682,7 @@ if __name__ == '__main__':
     process_wikidata_dump(
         out_filepath=out_filepath,
         in_filepath=wikidata_datadump_path,
+        db_name=db_name,
         lang=lang,
         do_grab_proplabel=do_grab_proplabel,
         do_grab_valuelabel=do_grab_valuelabel,
