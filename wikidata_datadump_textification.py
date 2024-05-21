@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 # from sentence_transformers import SentenceTransformer
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
 from time import time
 from tqdm import tqdm
@@ -306,18 +306,39 @@ def entity_to_statements(
                 # print('has datavalue', claim_)  # ['mainsnak']
                 value_ = claim_['mainsnak']['datavalue']['value']
 
+                value_label = value_
                 if isinstance(value_, dict):
                     # print(value)
                     if 'id' in value_:
-                        value_ = value_['id']
+                        value_label = value_['id']
                     if 'amount' in value_:
-                        value_ = value_['amount']
+                        value_label = value_['amount']
                     if 'time' in value_:
-                        value_ = value_['time']
+                        value_label = value_['time']
+                    if 'latitude' in value_:
+                        value_label = f'lat{value_["latitude"]}'
+                        if 'longitude' in value_:
+                            value_label = (
+                                f'{value_label}_lon{value_["longitude"]}'
+                            )
+                        if 'altitude' in value_:
+                            value_label = (
+                                f'{value_label}_alt{value_["altitude"]}'
+                            )
+                    # If value is not QID, then return value as value_label
+                    value_ = value_label
 
-                value_label = value_
-                if conn is not None and value_[0] == 'Q':
-                    value_label = query_label(conn, value_, field='qid')
+                if conn is not None:
+                    if (isinstance(value_, str) and value_[0] == 'Q'):
+                        value_label = query_label(conn, value_, field='qid')
+                        if value_label is not None:
+                            value_label = value_label[1]
+                            if value_label[:2] == "b'":
+                                value_label = value_label[2:]
+                            if value_label[-1] == "'":
+                                value_label = value_label[:-1]
+
+                # print(f'{value_=}, {value_label=}')
 
                 if do_grab_valuelabel:
                     value_label = wdrest.get_item_from_wikidata(
@@ -328,6 +349,10 @@ def entity_to_statements(
                 prop_label = pid_
                 if conn is not None:
                     prop_label = query_label(conn, pid_, field='pid')
+                    if prop_label is not None:
+                        prop_label = prop_label[1]
+                    else:
+                        print(f'{pid_=}, {prop_label=}')
 
                 if do_grab_proplabel:
                     prop_label = wdrest.get_property_from_wikidata(
@@ -436,9 +461,9 @@ def stream_etl_wikidata_datadump(
             )
 
             for dict_ in dict_list:
-                line_ = ','.join([f'"{item_}"' for item in dict_.values()])
+                line_ = ','.join([f'"{item_}"' for item_ in dict_.values()])
                 line_ = f'{line_}\n'
-                fout.write()
+                fout.write(line_)
 
             n_statements = n_statements + len(dict_list)
 
@@ -578,10 +603,25 @@ def get_one_pid_label(pid_, verbose=False):
         return {'pid': f'P{pid_}', 'label': label_, 'n_pid': pid_}
     except urllib.error.HTTPError as e:
         if verbose:
-            print(f'Error: {e}')
+            print(f'Error: P{pid_}: {e}')
 
     # print("url is error")
     return {'pid': f'P{pid_}', 'label': None, 'n_pid': pid_}
+
+
+def fix_df_pid_labels(df, max_pid=12727, n_cores=cpu_count()-1):
+    pids_full = range(1, max_pid+1)
+    pids = [pid_ for pid_ in pids_full if pid_ not in df.pid]
+
+    n_pids = len(pids)
+    print(f'{n_pids=}')
+
+    with ThreadPool(n_cores) as pool:
+        # Wrap pool.imap with tqdm for progress tracking
+        pool_imap = pool.imap(get_one_pid_label, pids)
+        pid_labels = list(tqdm(pool_imap, total=n_pids))
+
+    return pid_labels
 
 
 def get_all_pid_labels(max_pid=12727, n_cores=cpu_count()-1, filename=None):
@@ -665,11 +705,14 @@ if __name__ == '__main__':
     n_complete = 10
 
     if qids_only:
-        out_filename = out_filename.replace('_XYZ_', '_qids_XYZ_')
+        out_filepath = out_filepath.replace('_XYZ_', '_qids_XYZ_')
         # Example 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
+
     if n_complete is not None:
-        out_filename = out_filename.replace('_XYZ_', f'_{n_complete}_')
+        out_filepath = out_filepath.replace('_XYZ_', f'_{n_complete}_')
         # Example f'wikidata_vectordb_datadump_qids_{n_complete}_en.csv'
+
+    print(f'{out_filepath=}')
 
     """
     pid_labels_filename = 'wikidata_vectordb_datadump_qids_12723_en.csv'
@@ -684,6 +727,7 @@ if __name__ == '__main__':
         in_filepath=wikidata_datadump_path,
         db_name=db_name,
         lang=lang,
+        n_complete=n_complete,
         do_grab_proplabel=do_grab_proplabel,
         do_grab_valuelabel=do_grab_valuelabel,
         qids_only=qids_only
