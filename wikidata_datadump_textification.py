@@ -1,13 +1,17 @@
 import bz2
+import dask.dataframe as dd
 import json
 import logging
 import os
+import pandas as pd
 import requests
 import urllib  # For opening and reading URLs.
 import subprocess
 import sys
 
 # from sentence_transformers import SentenceTransformer
+from multiprocessing import Pool, cpu_count
+from multiprocessing.dummy import Pool as ThreadPool
 from time import time
 from tqdm import tqdm
 from urllib.request import urlopen
@@ -354,7 +358,7 @@ def stream_etl_wikidata_datadump(
     # n_has_sitelinks = n_has_sitelinks if 'n_has_sitelinks' in locals() else 0
     # n_has_datavalue = n_has_datavalue if 'n_has_datavalue' in locals() else 0
     # n_has_en_desc = n_has_en_desc if 'n_has_en_desc' in locals() else 0
-
+    print(f'Starting urlopen from {in_filepath}')
     with urlopen(in_filepath) as stream:
         with bz2.BZ2File(stream) as file:
             pbar = tqdm(enumerate(file))
@@ -399,18 +403,17 @@ def stream_etl_wikidata_datadump(
                     continue
 
                 qid_ = entity['id']
-                print(f'Checking if {qid_}, in {fout.name}')
-                check_ = grep_string_in_file(f'{qid_},', fout.name)
-                print(f"{check_=}")
-                if grep_string_in_file(f'{qid_},', fout.name):
+                """
+                check_qid_exists = grep_string_in_file(f'{qid_},', fout.name)
+                if check_qid_exists:
                     # Skip if QID already exists in the file
                     continue
-
+                """
                 item_desc = entity['descriptions'][lang]['value']
 
                 # n_has_sitelinks = n_has_sitelinks + 1
                 if qids_only:
-                    fout.write(f'{qid_},{item_desc}\n')
+                    fout.write(f'{qid_},"{item_desc}"\n')
                     n_statements = n_statements + 1
                     continue
 
@@ -435,7 +438,7 @@ def grep_string_in_file(search_string, file_path):
             ['grep', '-q', search_string, file_path],
             stderr=subprocess.STDOUT
         )
-        print(f'{output=}')
+        # print(f'{output=}')
         return True
     except subprocess.CalledProcessError as e:
         # grep returns a non-zero exit status if the string is not found
@@ -447,9 +450,68 @@ def grep_string_in_file(search_string, file_path):
             raise e
 
 
+def correct_qid_label_csv(in_filename, out_filename, n_test=10, max_iter=None):
+    with open(in_filename, 'r') as f_inn:
+        with open(out_filename, 'w') as f_out:
+            header = f_inn.readline()
+            header = header.replace("\n", "").split(',')
+            header = ','.join([f'"{head_}"' for head_ in header])
+            header = f'{header}\n'
+            f_out.write(header)
+            iterator = tqdm(enumerate(f_inn.readlines()), total=max_iter)
+            for k, line in iterator:
+                qid_labels = line.split(',')
+                qid_ = qid_labels[0]
+
+                label_ = ' '.join(qid_labels[1:]).replace('\n', '')
+                label_ = label_.encode()
+
+                f_out.write(f'{qid_},{label_}\n')
+                if n_test is not None and k > n_test:
+                    break
+
+
+def query_qid_label(conn, qid):
+    cur = conn.cursor()
+    cur.execute(f"select * from qid_labels where qid == '{qid}';")
+    return cur.fetchone()
+    # conn = sqlite3.connect('wikidata_qid_labels.db')
+    # query_qid_label(conn, 'Q42')
+    # conn.close()
+
+
+def query_pid_label(conn, pid):
+    cur = conn.cursor()
+    cur.execute(f"select * from pid_labels where pid == '{pid}';")
+    return cur.fetchone()
+    # conn = sqlite3.connect('wikidata_pid_labels.db')
+    # query_qid_label(conn, 'Q42')
+    # conn.close()
+
+
+def query_label(conn, qpid, field='qid'):
+    cur = conn.cursor()
+    cur.execute(f"select * from {field}_labels where {field} == '{qpid}';")
+    return cur.fetchone()
+    # conn = sqlite3.connect('wikidata_pid_labels.db')
+    # query_qid_label(conn, 'Q42')
+    # conn.close()
+
+
+def load_qid_label_csv(filename):
+    # df_ = pd.read_csv(filename, encoding='latin1')
+    df_ = dd.read_csv(filename).compute()
+    df_['n_qid'] = df_['qid'].apply(lambda x: int(x.replace('Q', '')))
+    # df_['label'] = df_['label'].apply(lambda x: x.encode().decode())
+    # df_['label'] = df_['label'].str.decode('utf-8')
+    df_['label'] = df_['label'].apply(lambda x: x[1:])
+    df_.sort_values('n_qid', ascending=True, ignore_index=True, inplace=True)
+    return df_.set_index('n_qid')
+
+
 def confirm_overwrite(filepath):
     print(f'File exists: {filepath}')
-    confirm = input("Confirm overwrite (y/[n])?: ")
+    confirm = input("Confirm overwrite (y/c/[n])?: ")
 
     while True:
 
@@ -462,9 +524,68 @@ def confirm_overwrite(filepath):
                 "File not selected for overwrite. Please change output filename"
             )
             return False
+        elif confirm.upper() == "C":
+            print("File selected for continue.")
+            return None
         else:
             print(f'Input unrecognised. Please enter `y` or `n`')
             confirm = input("Confirm overwrite (y/[n])?: ")
+
+
+def get_one_pid_label(pid_, verbose=False):
+
+    if USE_LOCAL:
+        WIKIMEDIA_TOKEN = os.environ.get('WIKIMEDIA_TOKEN')
+    else:
+        WIKIMEDIA_TOKEN = userdata.get('WIKIMEDIA_TOKEN')
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {WIKIMEDIA_TOKEN}'
+    }
+
+    rest_api_uri = 'https://www.wikidata.org/w/rest.php/wikibase/v0/entities'
+    prop_label_uri = f'{rest_api_uri}/properties/P{pid_}/labels/en'
+    # label_ = requests.get(prop_label_uri).content.decode()
+    try:
+        with urllib.request.urlopen(prop_label_uri) as j_inn:
+            for key, val in headers.items():
+                j_inn.headers[key] = val
+
+            assert ('Authorization' in j_inn.headers), (
+                'Authorization not in j_inn.headers'
+            )
+
+            get_code = j_inn.getcode()
+            res_ = j_inn.read().decode('utf-8')
+            label_ = json.loads(res_)
+
+        # if label_[0] == '{' and label_[-1] == '}':
+        #     return {'pid': f'P{pid_}', 'label': None, 'n_pid': pid_}
+
+        return {'pid': f'P{pid_}', 'label': label_, 'n_pid': pid_}
+    except urllib.error.HTTPError as e:
+        if verbose:
+            print(f'Error: {e}')
+
+    # print("url is error")
+    return {'pid': f'P{pid_}', 'label': None, 'n_pid': pid_}
+
+
+def get_all_pid_labels(max_pid=12727, n_cores=cpu_count()-1, filename=None):
+    pids = range(1, max_pid+1)
+    with ThreadPool(n_cores) as pool:
+        # Wrap pool.imap with tqdm for progress tracking
+        pool_imap = pool.imap(get_one_pid_label, pids)
+        pid_labels = list(tqdm(pool_imap, total=max_pid))
+
+    df = pd.DataFrame(pid_labels)
+    df.dropna(inplace=True)
+
+    if filename is not None:
+        df_pid_labels.to_csv(filename)
+
+    return df.sort_values('n_pid', ignore_index=True)
 
 
 def process_wikidata_dump(
@@ -477,13 +598,18 @@ def process_wikidata_dump(
         'statement,embedding\n'
     )
 
+    warm_start = False
     if os.path.exists(out_filepath):
-        if not confirm_overwrite(out_filepath):
+        overwrite = confirm_overwrite(out_filepath)
+        warm_start = overwrite is None
+        if not (warm_start or overwrite):
             sys.exit()
 
-    with open(out_filepath, 'w') as fout:
-        header = 'qid,label\n' if qids_only else full_header
-        fout.write(header)
+    if not warm_start:
+        print(f'Creating Header')
+        with open(out_filepath, 'w') as fout:
+            header = 'qid,label\n' if qids_only else full_header
+            fout.write(header)
 
     with open(out_filepath, 'a') as fout:
         stream_etl_wikidata_datadump(
@@ -507,6 +633,10 @@ if __name__ == '__main__':
         'https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2'
     )
 
+    wikidata_datadump_path = (
+        'file:///home/jofr/Research/Wikidata/latest-all.json.bz2'
+    )
+
     out_filedir = './' if USE_LOCAL else '/content/drive/'
     out_filename = 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
     out_filepath = os.path.join(out_filedir, out_filename)
@@ -515,7 +645,14 @@ if __name__ == '__main__':
     do_grab_proplabel = False
     do_grab_valuelabel = False
     qids_only = True
-
+    """
+    pid_labels_filename = 'wikidata_vectordb_datadump_qids_12723_en.csv'
+    df_pid_labels = get_all_pid_labels(
+        max_pid=12727,
+        n_cores=cpu_count()-1,
+        filename=pid_labels_filename
+    )
+    """
     process_wikidata_dump(
         out_filepath=out_filepath,
         in_filepath=wikidata_datadump_path,
