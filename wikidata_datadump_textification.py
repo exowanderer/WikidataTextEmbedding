@@ -10,9 +10,10 @@ import sqlite3
 import subprocess
 import sys
 
-# from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool as ThreadPool
+from SPARQLWrapper import SPARQLWrapper, JSON
 from time import time
 from tqdm import tqdm
 from urllib.request import urlopen
@@ -281,7 +282,7 @@ class WikidataRESTAPI:
 
 
 def entity_to_statements(
-        entity, conn=None, do_grab_proplabel=False, lang='en',
+        entity, conn=None, embedder=None, do_grab_proplabel=False, lang='en',
         do_grab_valuelabel=False):
 
     if lang not in entity['descriptions'].keys():
@@ -315,6 +316,8 @@ def entity_to_statements(
                         value_label = value_['amount']
                     if 'time' in value_:
                         value_label = value_['time']
+                    if 'text' in value_:
+                        value_label = value_['text']
                     if 'latitude' in value_:
                         value_label = f'lat{value_["latitude"]}'
                         if 'longitude' in value_:
@@ -325,11 +328,23 @@ def entity_to_statements(
                             value_label = (
                                 f'{value_label}_alt{value_["altitude"]}'
                             )
+
+                    if isinstance(value_label, dict):
+                        if 'entity-type' not in value_.keys():
+                            # if value['entity-type'] == 'item':
+                            print(value_)
+                        continue
+
                     # If value is not QID, then return value as value_label
                     value_ = value_label
 
                 if conn is not None:
-                    if (isinstance(value_, str) and value_[0] == 'Q'):
+                    is_qid = False
+                    is_string = isinstance(value_, str)
+                    if is_string:
+                        is_qid = value_[0] == 'Q' and value_[1:].isdigit()
+
+                    if is_qid:
                         value_label = query_label(conn, value_, field='qid')
                         if value_label is not None:
                             value_label = value_label[1]
@@ -360,12 +375,29 @@ def entity_to_statements(
                         key='labels'
                     )
 
+                if value_label is None:
+                    continue
+
+                if isinstance(value_, str):
+                    value_ = value_.replace('"', "\'")
+
+                item_desc = item_desc.replace('"', "\'")
+                prop_label = prop_label.replace('"', "\'")
+                value_label = value_label.replace('"', "\'")
+
                 statement_ = f'{item_desc} {prop_label} {value_label}'
+                statement_ = statement_.replace('"', "\'")
+
+                # assert ('"' not in statement_)
+                # if qid_ == 'Q31':
+                #     print(qid_, item_desc)
+                #     print(pid_, prop_label)
+                #     print(value_, value_label)
 
                 embedding_ = None
-                # if embedder is not None:
-                #     # embedding_ = embedd_jina_api(statement_)
-                #     embedding_ = embedder.encode(statement_)
+                if embedder is not None:
+                    # embedding_ = embedd_jina_api(statement_)
+                    embedding_ = embedder.encode(statement_)
 
                 dict_list.append({
                     'qid': qid_,
@@ -382,10 +414,10 @@ def entity_to_statements(
 
 
 def stream_etl_wikidata_datadump(
-        in_filepath, fout, conn=None, lang='en', n_complete=None,
+        in_filepath, fout, conn=None, embedder=None, lang='en', n_complete=None,
         do_grab_proplabel=False, do_grab_valuelabel=False, qids_only=False):
 
-    n_attempts = n_attempts if 'n_attempts' in locals() else 0
+    n_items = n_items if 'n_items' in locals() else 0
     n_statements = n_statements if 'n_statements' in locals() else 0
     # n_has_sitelinks = n_has_sitelinks if 'n_has_sitelinks' in locals() else 0
     # n_has_datavalue = n_has_datavalue if 'n_has_datavalue' in locals() else 0
@@ -396,11 +428,11 @@ def stream_etl_wikidata_datadump(
         for k_iter, line in pbar:
             pbar_desc = (
                 f'Counters: '
-                f'n_attempts {n_attempts}'
+                f'n_items {n_items}'
                 f' - n_statements: {n_statements}'
                 # f' - avg_time_prop: {time_to_prop / (n_statements+1)}'
                 # f' - avg_time_item: {time_to_item / (n_statements+1)}'
-                # f': {n_statements/(n_attempts+1):0.1f}/item'
+                # f': {n_statements/(n_items+1):0.1f}/item'
                 # f' - n_has_sitelinks {n_has_sitelinks}:'
                 # f': {n_has_sitelinks/(n_statements+1)*100:0.1f}%'
                 # f' - n_has_datavalue {n_has_sitelinks}:'
@@ -412,11 +444,11 @@ def stream_etl_wikidata_datadump(
             pbar.set_description(pbar_desc)
             pbar.refresh()  # to show immediately the update
 
-            if k_iter < n_attempts:
+            if k_iter < n_items:
                 continue
 
-            n_attempts = n_attempts + 1
-            if n_complete is not None and n_attempts > n_complete:
+            n_items = n_items + 1
+            if n_complete is not None and n_items > n_complete:
                 # Stop after `n_complete` items to avoid overloaded filesize
                 break
 
@@ -456,6 +488,7 @@ def stream_etl_wikidata_datadump(
                 entity,
                 lang=lang,
                 conn=conn,
+                embedder=embedder,
                 do_grab_proplabel=do_grab_proplabel,
                 do_grab_valuelabel=do_grab_valuelabel
             )
@@ -528,7 +561,13 @@ def query_pid_label(conn, pid):
 
 def query_label(conn, qpid, field='qid'):
     cur = conn.cursor()
-    cur.execute(f"select * from {field}_labels where {field} == '{qpid}';")
+    query = f"""select * from {field}_labels where {field} == '{qpid}';"""
+    try:
+        cur.execute(query)
+    except Exception as e:
+        print(f'Error: {e}')
+        print(f'Query: {query}')
+
     return cur.fetchone()
     # conn = sqlite3.connect('wikidata_pid_labels.db')
     # query_qid_label(conn, 'Q42')
@@ -569,7 +608,7 @@ def confirm_overwrite(filepath):
             confirm = input("Confirm overwrite (y/[n])?: ")
 
 
-def get_one_pid_label(pid_, verbose=False):
+def get_one_pid_label(n_pid_, verbose=False):
 
     if USE_LOCAL:
         WIKIMEDIA_TOKEN = os.environ.get('WIKIMEDIA_TOKEN')
@@ -582,7 +621,7 @@ def get_one_pid_label(pid_, verbose=False):
     }
 
     rest_api_uri = 'https://www.wikidata.org/w/rest.php/wikibase/v0/entities'
-    prop_label_uri = f'{rest_api_uri}/properties/P{pid_}/labels/en'
+    prop_label_uri = f'{rest_api_uri}/properties/P{n_pid_}/labels/en'
     # label_ = requests.get(prop_label_uri).content.decode()
     try:
         with urllib.request.urlopen(prop_label_uri) as j_inn:
@@ -600,27 +639,27 @@ def get_one_pid_label(pid_, verbose=False):
         # if label_[0] == '{' and label_[-1] == '}':
         #     return {'pid': f'P{pid_}', 'label': None, 'n_pid': pid_}
 
-        return {'pid': f'P{pid_}', 'label': label_, 'n_pid': pid_}
+        return {'pid': f'P{n_pid_}', 'label': label_, 'n_pid': n_pid_}
     except urllib.error.HTTPError as e:
         if verbose:
             print(f'Error: P{pid_}: {e}')
 
     # print("url is error")
-    return {'pid': f'P{pid_}', 'label': None, 'n_pid': pid_}
+    return {'pid': f'P{n_pid_}', 'label': None, 'n_pid': n_pid_}
 
 
 def fix_df_pid_labels(df, max_pid=12727, n_cores=cpu_count()-1):
-    pids_full = range(1, max_pid+1)
-    pids = [pid_ for pid_ in pids_full if pid_ not in df.pid]
+    npids_full = range(1, max_pid+1)
+    n_pids = [npid_ for npid_ in npids_full if npid_ not in df.n_pid.values]
 
-    n_pids = len(pids)
-    print(f'{n_pids=}')
+    len_n_pids = len(n_pids)
+    print(f'{len_n_pids=}')
 
     with ThreadPool(n_cores) as pool:
         # Wrap pool.imap with tqdm for progress tracking
-        pool_imap = pool.imap(get_one_pid_label, pids)
-        pid_labels = list(tqdm(pool_imap, total=n_pids))
-
+        pool_imap = pool.imap(get_one_pid_label, n_pids)
+        pid_labels = list(tqdm(pool_imap, total=len_n_pids))
+    # missing_pid_labels = fix_df_pid_labels(df_pid_labels)
     return pid_labels
 
 
@@ -640,10 +679,41 @@ def get_all_pid_labels(max_pid=12727, n_cores=cpu_count()-1, filename=None):
     return df.sort_values('n_pid', ignore_index=True)
 
 
+def sparql_list_all_pid_labels(
+        wikidata_sparql_endpoint="https://query.wikidata.org/sparql"):
+    # Set up the SPARQL endpoint and the query
+    sparql = SPARQLWrapper(wikidata_sparql_endpoint)
+    sparql.setQuery("""
+        SELECT ?property ?propertyLabel WHERE {
+            ?property a wikibase:Property .
+            SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+        }
+    """)
+    #         LIMIT 12000
+
+    # Set the return format to JSON
+    sparql.setReturnFormat(JSON)
+
+    # Execute the query and get the results
+    results = sparql.query().convert()
+
+    # Process the results
+    properties = results["results"]["bindings"]
+
+    # Extract and print the property labels
+    pid_labels = []
+    for prop in properties:
+        pid = prop["property"]["value"].split('/')[-1]  # Extract the PID
+        label = prop["propertyLabel"]["value"]  # Extract the label
+        pid_labels.append({'pid': pid, 'label': label})
+
+    return pd.DataFrame(pid_labels)
+
+
 def process_wikidata_dump(
-        out_filepath, in_filepath, db_name='wikidata_qid_labels.db', lang='en',
-        n_complete=None, do_grab_proplabel=False, do_grab_valuelabel=False,
-        qids_only=False):
+        out_filepath, in_filepath, db_name='wikidata_qid_pid_labels.db',
+        embedder=None, lang='en', n_complete=None, do_grab_proplabel=False,
+        do_grab_valuelabel=False, qids_only=False):
 
     full_header = (
         'qid,pid,value,'
@@ -669,6 +739,7 @@ def process_wikidata_dump(
             in_filepath=in_filepath,
             fout=fout,
             conn=conn,
+            embedder=embedder,
             lang=lang,
             n_complete=n_complete,
             do_grab_proplabel=do_grab_proplabel,
@@ -677,12 +748,62 @@ def process_wikidata_dump(
         )
 
 
+def fetch_wikidata_labels(limit=10000, offset=0):
+    sparql = SPARQLWrapper("https://query.wikidata.org/sparql")
+    sparql.setReturnFormat(JSON)
+
+    labels = []
+
+    while True:
+        query = f"""
+            SELECT ?item ?itemLabel WHERE {{
+                ?item wdt:P31 wd:Q5 .
+                SERVICE wikibase:label {{ bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }}
+            }}
+            LIMIT {limit} OFFSET {offset}
+        """
+
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        bindings = results["results"]["bindings"]
+        if not bindings:
+            break
+
+        for result in bindings:
+            qid = result["item"]["value"].split('/')[-1]  # Extract the QID
+            label = result["itemLabel"]["value"]  # Extract the label
+            labels.append({'qid': qid, 'label': label})
+
+        offset += limit
+        print(f"Fetched {len(labels)} items so far...")
+
+    return labels
+
+
 if __name__ == '__main__':
-    # if 'embedder' not in locals():
-    #     embedder = SentenceTransformer(
-    #         "jinaai/jina-embeddings-v2-base-en",
-    #         trust_remote_code=True
-    #     )
+    from argparse import ArgumentParser
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Arguments for Wikidata Data Dump Processes'
+    )
+    parser.add_argument(
+        '--n_complete', '-nc', type=int, default=10,
+        help='Number of Wikidata items to process from data dump.'
+    )
+    parser.add_argument(
+        '--embed', '-e', action='store_true', default=False,
+        help='Toggle to activate the embedder process.'
+    )
+    args = parser.parse_args()
+
+    embedder = None
+    if args.embed:  # and 'embedder' not in locals()
+        embedder = SentenceTransformer(
+            "jinaai/jina-embeddings-v2-base-en",
+            trust_remote_code=True
+        )
 
     wikidata_datadump_path = (
         'https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2'
@@ -696,13 +817,13 @@ if __name__ == '__main__':
     out_filename = 'wikidata_vectordb_datadump_XYZ_en.csv'
     out_filepath = os.path.join(out_filedir, out_filename)
 
-    db_name = 'wikidata_qid_labels.db'
+    db_name = 'wikidata_qid_pid_labels.db'
 
     lang = 'en'
     do_grab_proplabel = False
     do_grab_valuelabel = False
     qids_only = False
-    n_complete = 10
+    n_complete = args.n_complete
 
     if qids_only:
         out_filepath = out_filepath.replace('_XYZ_', '_qids_XYZ_')
@@ -722,10 +843,17 @@ if __name__ == '__main__':
         filename=pid_labels_filename
     )
     """
+    """
+    # Example usage
+    labels = fetch_wikidata_labels(limit=10000)
+    for qid, label in labels:
+        print(f"{qid}: {label}")
+    """
     process_wikidata_dump(
         out_filepath=out_filepath,
         in_filepath=wikidata_datadump_path,
         db_name=db_name,
+        embedder=embedder,
         lang=lang,
         n_complete=n_complete,
         do_grab_proplabel=do_grab_proplabel,
@@ -735,8 +863,8 @@ if __name__ == '__main__':
 
     """
     Experiment Log: Stardate 2024.134
-    Counters: n_attempts 1409344 : : 1409345it [23:44, 989.07it/s] - linear
-    Counters: n_attempts 636277 : : 636277it [1:20:44, 131.12it/s] - ThreadPool prop
-    Counters: n_attempts 1163626 : : 1163627it [24:14, 799.98it/s] - linear again
-    Counters: n_attempts 2053703 - n_statements: 22371336: : 2053703it [31:46, 1077.46it/s] - linear again
+    Counters: n_items 1409344 : : 1409345it [23:44, 989.07it/s] - linear
+    Counters: n_items 636277 : : 636277it [1:20:44, 131.12it/s] - ThreadPool prop
+    Counters: n_items 1163626 : : 1163627it [24:14, 799.98it/s] - linear again
+    Counters: n_items 2053703 - n_statements: 22371336: : 2053703it [31:46, 1077.46it/s] - linear again
     """
