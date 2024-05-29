@@ -448,9 +448,6 @@ def stream_etl_wikidata_datadump(
                 continue
 
             n_items = n_items + 1
-            if n_complete is not None and n_items > n_complete:
-                # Stop after `n_complete` items to avoid overloaded filesize
-                break
 
             line = line.decode().strip()
 
@@ -499,6 +496,9 @@ def stream_etl_wikidata_datadump(
                 fout.write(line_)
 
             n_statements = n_statements + len(dict_list)
+            if n_complete is not None and n_statements > n_complete:
+                # Stop after `n_complete` items to avoid overloaded filesize
+                break
 
 
 def grep_string_in_file(search_string, file_path):
@@ -646,6 +646,47 @@ def get_one_pid_label(n_pid_, verbose=False):
 
     # print("url is error")
     return {'pid': f'P{n_pid_}', 'label': None, 'n_pid': n_pid_}
+
+
+def post_process_embed_df(df, embed_batchsize=120):
+    stack_rows = []
+
+    start = time()
+    n_rows = df.index.size
+    pbar = tqdm(df.iterrows(), total=n_rows)
+
+    out_embeds = []
+    out_inds = []
+    for row_ in pbar:
+        stack_rows.append(row_)
+        if len(stack_rows) == embed_batchsize:
+            statements = [row_[1].statement for row_ in stack_rows]
+            inds = [row_[0] for row_ in stack_rows]
+            embeddings_ = embedder.encode(statements)
+
+            for ind_, embed_ in zip(inds, embeddings_):
+                df.at[ind_, 'embedding'] = list(embed_)
+
+            # Reset batch
+            stack_rows = []
+
+            ratio_done = (n_rows - df['embedding'].isnull().sum())/n_rows
+            pbar.set_description(f'{ratio_done:0.1%}')
+            pbar.refresh()  # to show immediately the update
+
+    if len(stack_rows):
+        print(f'Wrapping up trailing {len(stack_rows)} rows.')
+        statements = [row_[1].statement for row_ in stack_rows]
+        inds = [row_[0] for row_ in stack_rows]
+        embeddings_ = embedder.encode(statements)
+
+        for ind_, embed_ in zip(inds, embeddings_):
+            df.at[ind_, 'embedding'] = list(embed_)
+
+    print(f'Operation took {time() - start:0.1} seconds.')
+    # return out_inds, out_embeds
+    # df['embeddings'] = out_embeds
+    return df
 
 
 def fix_df_pid_labels(df, max_pid=12727, n_cores=cpu_count()-1):
@@ -823,6 +864,7 @@ if __name__ == '__main__':
     do_grab_proplabel = False
     do_grab_valuelabel = False
     qids_only = False
+    embed_batchsize = 120
     n_complete = args.n_complete
 
     if qids_only:
@@ -853,7 +895,7 @@ if __name__ == '__main__':
         out_filepath=out_filepath,
         in_filepath=wikidata_datadump_path,
         db_name=db_name,
-        embedder=embedder,
+        embedder=None,  # Test post-process embedding
         lang=lang,
         n_complete=n_complete,
         do_grab_proplabel=do_grab_proplabel,
