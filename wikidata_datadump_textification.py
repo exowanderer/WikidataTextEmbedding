@@ -28,6 +28,24 @@ except Exception as e:
     USE_LOCAL = True
 
 
+def is_docker():
+    """Check if the script is running inside a Docker container."""
+    # Check for .dockerenv file
+    if os.path.exists('/.dockerenv'):
+        return True
+
+    # Check for Docker-specific entries in /proc/1/cgroup
+    try:
+        with open('/proc/1/cgroup', 'rt') as f:
+            for line in f:
+                if 'docker' in line:
+                    return True
+    except Exception:
+        pass
+
+    return False
+
+
 def embedd_jina_api(statement):
 
     url = 'https://api.jina.ai/v1/embeddings'
@@ -545,18 +563,12 @@ def query_qid_label(conn, qid):
     cur = conn.cursor()
     cur.execute(f"select * from qid_labels where qid == '{qid}';")
     return cur.fetchone()
-    # conn = sqlite3.connect('wikidata_qid_labels.db')
-    # query_qid_label(conn, 'Q42')
-    # conn.close()
 
 
 def query_pid_label(conn, pid):
     cur = conn.cursor()
     cur.execute(f"select * from pid_labels where pid == '{pid}';")
     return cur.fetchone()
-    # conn = sqlite3.connect('wikidata_pid_labels.db')
-    # query_qid_label(conn, 'Q42')
-    # conn.close()
 
 
 def query_label(conn, qpid, field='qid'):
@@ -569,9 +581,6 @@ def query_label(conn, qpid, field='qid'):
         print(f'Query: {query}')
 
     return cur.fetchone()
-    # conn = sqlite3.connect('wikidata_pid_labels.db')
-    # query_qid_label(conn, 'Q42')
-    # conn.close()
 
 
 def load_qid_label_csv(filename):
@@ -835,6 +844,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
+    IS_DOCKER = is_docker()
     embedder = None
     if args.embed:  # and 'embedder' not in locals()
         embedder = SentenceTransformer(
@@ -842,26 +852,45 @@ if __name__ == '__main__':
             trust_remote_code=True
         )
 
-    wikidata_datadump_path = (
-        'https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.bz2'
-    )
+    wikidata_datadump_filename = 'latest-all.json.bz2'
 
-    wikidata_datadump_path = (
-        'file:///home/jofr/Research/Wikidata/latest-all.json.bz2'
-    )
+    DL_STREAM = os.environ.get('STREAM', False)
+    N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
 
-    out_filedir = './' if USE_LOCAL else '/content/drive/'
-    out_filename = 'csvfiles/wikidata_vectordb_datadump_XYZ_en.csv'
+    if DL_STREAM:
+        wikidata_datadump_path = (
+            f'https://dumps.wikimedia.org/wikidatawiki/entities/'
+            f'{wikidata_datadump_filename}'
+        )
+    elif IS_DOCKER:
+        wikidata_datadump_path = (
+            f'file:///app/datadump/{wikidata_datadump_filename}'
+        )
+    else:
+        wikidata_datadump_path = (
+            f'file:///home/jofr/Research/Wikidata/{wikidata_datadump_filename}'
+        )
+
+    out_filedir = './csvfiles/' if USE_LOCAL else '/content/drive/'
+    out_filename = 'wikidata_vectordb_datadump_XYZ_en.csv'
+
+    if IS_DOCKER:
+        out_filedir = '/app/csvfiles/'
+
     out_filepath = os.path.join(out_filedir, out_filename)
 
     db_name = 'sqlitedbs/wikidata_qid_pid_labels.db'
+
+    if IS_DOCKER:
+        print("Running inside a Docker container.")
+        db_name = f'/app/{db_name}'
 
     lang = 'en'
     do_grab_proplabel = False
     do_grab_valuelabel = False
     qids_only = False
     embed_batchsize = 120
-    n_complete = args.n_complete
+    n_complete = N_COMPLETE
 
     if qids_only:
         out_filepath = out_filepath.replace('_XYZ_', '_qids_XYZ_')

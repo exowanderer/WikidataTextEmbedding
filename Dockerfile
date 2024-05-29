@@ -12,12 +12,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
 COPY ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
-COPY ./sqlitedbs/wikidata_qid_pid_labels.db ./sqlitedbs/wikidata_qid_pid_labels.db
+# COPY ./sqlitedbs/wikidata_qid_pid_labels.db ./sqlitedbs/wikidata_qid_pid_labels.db
 
 # Create a volume to store the output CSV files
-VOLUME /app/output
+VOLUME /app/csvfiles
+
+# Set the environment variable inside the Docker container
+ENV WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN
+ENV N_COMPLETE=$N_COMPLETE
 
 # Run the Python script
 CMD ["python", "wikidata_datadump_textification.py"]
-
-# CMD ["python", "post_process_embed_df.py"]
