@@ -648,44 +648,39 @@ def get_one_pid_label(n_pid_, verbose=False):
     return {'pid': f'P{n_pid_}', 'label': None, 'n_pid': n_pid_}
 
 
-def post_process_embed_df(df, embed_batchsize=120):
-    stack_rows = []
-
+def post_process_embed_df(df, embedder, embed_batchsize=120):
     start = time()
     n_rows = df.index.size
     pbar = tqdm(df.iterrows(), total=n_rows)
 
-    out_embeds = []
-    out_inds = []
-    for row_ in pbar:
+    stack_rows = []
+    for _, row_ in pbar:
         stack_rows.append(row_)
         if len(stack_rows) == embed_batchsize:
-            statements = [row_[1].statement for row_ in stack_rows]
-            inds = [row_[0] for row_ in stack_rows]
+            statements = [row_.statement for row_ in stack_rows]
+            inds = [row_.name for row_ in stack_rows]
             embeddings_ = embedder.encode(statements)
 
             for ind_, embed_ in zip(inds, embeddings_):
-                df.at[ind_, 'embedding'] = list(embed_)
+                df.at[ind_, 'embedding'] = embed_.tolist()
 
             # Reset batch
             stack_rows = []
 
-            ratio_done = (n_rows - df['embedding'].isnull().sum())/n_rows
+            ratio_done = (n_rows - df['embedding'].isnull().sum()) / n_rows
             pbar.set_description(f'{ratio_done:0.1%}')
             pbar.refresh()  # to show immediately the update
 
-    if len(stack_rows):
+    if stack_rows:
         print(f'Wrapping up trailing {len(stack_rows)} rows.')
-        statements = [row_[1].statement for row_ in stack_rows]
-        inds = [row_[0] for row_ in stack_rows]
+        statements = [row_.statement for row_ in stack_rows]
+        inds = [row_.name for row_ in stack_rows]
         embeddings_ = embedder.encode(statements)
 
         for ind_, embed_ in zip(inds, embeddings_):
-            df.at[ind_, 'embedding'] = list(embed_)
+            df.at[ind_, 'embedding'] = embed_.tolist()
 
-    print(f'Operation took {time() - start:0.1} seconds.')
-    # return out_inds, out_embeds
-    # df['embeddings'] = out_embeds
+    print(f'Operation took {time() - start:.1f} seconds.')
     return df
 
 
