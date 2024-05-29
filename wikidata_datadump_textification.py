@@ -747,7 +747,8 @@ def sparql_list_all_pid_labels(
 
 
 def process_wikidata_dump(
-        out_filepath, in_filepath, db_name='wikidata_qid_pid_labels.db',
+        out_filepath, in_filepath,
+        db_name='sqlitedbs/wikidata_qid_pid_labels.db',
         embedder=None, lang='en', n_complete=None, do_grab_proplabel=False,
         do_grab_valuelabel=False, qids_only=False):
 
@@ -850,10 +851,10 @@ if __name__ == '__main__':
     )
 
     out_filedir = './' if USE_LOCAL else '/content/drive/'
-    out_filename = 'wikidata_vectordb_datadump_XYZ_en.csv'
+    out_filename = 'csvfiles/wikidata_vectordb_datadump_XYZ_en.csv'
     out_filepath = os.path.join(out_filedir, out_filename)
 
-    db_name = 'wikidata_qid_pid_labels.db'
+    db_name = 'sqlitedbs/wikidata_qid_pid_labels.db'
 
     lang = 'en'
     do_grab_proplabel = False
@@ -864,16 +865,18 @@ if __name__ == '__main__':
 
     if qids_only:
         out_filepath = out_filepath.replace('_XYZ_', '_qids_XYZ_')
-        # Example 'wikidata_vectordb_datadump_qids_XYZ_en.csv'
+        # Example 'csvfiles/wikidata_vectordb_datadump_qids_XYZ_en.csv'
 
     if n_complete is not None:
         out_filepath = out_filepath.replace('_XYZ_', f'_{n_complete}_')
-        # Example f'wikidata_vectordb_datadump_qids_{n_complete}_en.csv'
+        # Example f'csvfiles/wikidata_vectordb_datadump_qids_
+        #   {n_complete}_en.csv'
 
     print(f'{out_filepath=}')
 
     """
     pid_labels_filename = 'wikidata_vectordb_datadump_qids_12723_en.csv'
+    pid_labels_filename = f'csvfiles/{pid_labels_filename}'
     df_pid_labels = get_all_pid_labels(
         max_pid=12727,
         n_cores=cpu_count()-1,

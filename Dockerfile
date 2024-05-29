@@ -11,7 +11,8 @@ COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
-COPY . .
+COPY ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
+COPY ./sqlitedbs/wikidata_qid_pid_labels.db ./sqlitedbs/wikidata_qid_pid_labels.db
 
 # Create a volume to store the output CSV files
 VOLUME /app/output
