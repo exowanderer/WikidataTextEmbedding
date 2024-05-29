@@ -20,6 +20,7 @@ VOLUME /app/csvfiles
 # Set the environment variable inside the Docker container
 ENV WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN
 ENV N_COMPLETE=$N_COMPLETE
+ENV EMBED=$EMBED
 
 # Run the Python script
 CMD ["python", "wikidata_datadump_textification.py"]

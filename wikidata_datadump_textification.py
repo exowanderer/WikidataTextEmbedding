@@ -845,17 +845,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     IS_DOCKER = is_docker()
+    DL_STREAM = os.environ.get('STREAM', False)
+    N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
+    EMBED = bool(os.environ.get('EMBED', args.embed))
+
     embedder = None
-    if args.embed:  # and 'embedder' not in locals()
+    if EMBED:  # and 'embedder' not in locals()
         embedder = SentenceTransformer(
             "jinaai/jina-embeddings-v2-base-en",
             trust_remote_code=True
         )
 
     wikidata_datadump_filename = 'latest-all.json.bz2'
-
-    DL_STREAM = os.environ.get('STREAM', False)
-    N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
 
     if DL_STREAM:
         wikidata_datadump_path = (
