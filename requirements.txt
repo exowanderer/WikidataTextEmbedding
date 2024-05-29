@@ -1,0 +1,6 @@
+dask[dataframe]
+pandas
+requests
+sentence-transformers
+SPARQLWrapper
+tqdm
