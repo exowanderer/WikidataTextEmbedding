@@ -1,8 +1,28 @@
+import os
 import pandas as pd
 import numpy as np
+
 from sentence_transformers import SentenceTransformer
 from time import time
 from tqdm import tqdm
+
+
+def is_docker():
+    """Check if the script is running inside a Docker container."""
+    # Check for .dockerenv file
+    if os.path.exists('/.dockerenv'):
+        return True
+
+    # Check for Docker-specific entries in /proc/1/cgroup
+    try:
+        with open('/proc/1/cgroup', 'rt') as f:
+            for line in f:
+                if 'docker' in line:
+                    return True
+    except Exception:
+        pass
+
+    return False
 
 
 def post_process_embed_df(df, embedder, embed_batchsize=120):
@@ -42,6 +62,14 @@ def post_process_embed_df(df, embedder, embed_batchsize=120):
 
 
 if __name__ == '__main__':
+    IS_DOCKER = is_docker()
+
+    csv_filename = 'wikidata_vectordb_datadump_100000_en.csv'
+    if IS_DOCKER:
+        csv_filepath = (f'/app/csvfiles/{csv_filename}')
+    else:
+        csv_filepath = (f'./csvfiles/{csv_filename}')
+
     # Initialize the SentenceTransformer model
     embedder = SentenceTransformer(
         "jinaai/jina-embeddings-v2-base-en",
@@ -52,7 +80,7 @@ if __name__ == '__main__':
     embed_batchsize = 100
 
     # Load the DataFrame from a CSV file
-    df_100000 = pd.read_csv('wikidata_vectordb_datadump_100000_en.csv')
+    df_100000 = pd.read_csv(csv_filepath)
 
     # Ensure the 'embedding' column exists and is initialized with None
     # if 'embedding' not in df_100000.columns:
@@ -60,10 +88,15 @@ if __name__ == '__main__':
 
     # Process the DataFrame and add embeddings
     df_1e5_embedded = post_process_embed_df(
-        df=df_100000,
+        df=df_100000[:100],
         embedder=embedder,
         embed_batchsize=embed_batchsize
     )
 
     outfilename = 'wikidata_vectordb_datadump_100000_embedded_en.csv'
-    df_1e5_embedded.to_csv(outfilename, index=False)
+    if IS_DOCKER:
+        out_filepath = (f'/app/csvfiles/{outfilename}')
+    else:
+        out_filepath = (f'./csvfiles/{outfilename}')
+
+    df_1e5_embedded.to_csv(out_filepath, index=False)

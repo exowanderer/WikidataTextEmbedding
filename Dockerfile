@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
 COPY ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
+COPY ./post_process_embed_df.py ./post_process_embed_df.py
 # COPY ./sqlitedbs/wikidata_qid_pid_labels.db ./sqlitedbs/wikidata_qid_pid_labels.db
 
 # Create a volume to store the output CSV files
@@ -23,4 +24,5 @@ ENV N_COMPLETE=$N_COMPLETE
 ENV EMBED=$EMBED
 
 # Run the Python script
-CMD ["python", "wikidata_datadump_textification.py"]
+# CMD ["python", "wikidata_datadump_textification.py"]
+CMD ["python", "post_process_embed_df.py"]
