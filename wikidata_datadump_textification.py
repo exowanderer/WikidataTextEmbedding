@@ -315,19 +315,14 @@ def entity_to_statements(
         pid_, claimlist_ = prop_claims_
         for claim_ in claimlist_:
 
-            # print(claim_['mainsnak']['datavalue']['value'])
-            # print(claim_['mainsnak'].keys())
-
             value_ = None  # Default to None
             statement_ = None  # Default to None
             if 'datavalue' in claim_['mainsnak'].keys():
-                # n_has_datavalue = n_has_datavalue + 1
-                # print('has datavalue', claim_)  # ['mainsnak']
                 value_ = claim_['mainsnak']['datavalue']['value']
 
                 value_label = value_
                 if isinstance(value_, dict):
-                    # print(value)
+
                     if 'id' in value_:
                         value_label = value_['id']
                     if 'amount' in value_:
@@ -349,7 +344,6 @@ def entity_to_statements(
 
                     if isinstance(value_label, dict):
                         if 'entity-type' not in value_.keys():
-                            # if value['entity-type'] == 'item':
                             print(value_)
                         continue
 
@@ -370,8 +364,6 @@ def entity_to_statements(
                                 value_label = value_label[2:]
                             if value_label[-1] == "'":
                                 value_label = value_label[:-1]
-
-                # print(f'{value_=}, {value_label=}')
 
                 if do_grab_valuelabel:
                     value_label = wdrest.get_item_from_wikidata(
@@ -406,15 +398,9 @@ def entity_to_statements(
                 statement_ = f'{item_desc} {prop_label} {value_label}'
                 statement_ = statement_.replace('"', "\'")
 
-                # assert ('"' not in statement_)
-                # if qid_ == 'Q31':
-                #     print(qid_, item_desc)
-                #     print(pid_, prop_label)
-                #     print(value_, value_label)
-
                 embedding_ = None
                 if embedder is not None:
-                    print(f'Embedding single statement')
+                    # print(f'Embedding single statement')
                     # embedding_ = embedd_jina_api(statement_)
                     embedding_ = embedder.encode(statement_)
 
@@ -497,8 +483,7 @@ def stream_etl_wikidata_datadump(
                 do_grab_proplabel=do_grab_proplabel,
                 do_grab_valuelabel=do_grab_valuelabel
             )
-            print()
-            print(f'{len(dict_list_)=}')
+
             if embed_batchsize is not None:
                 dict_list.extend(dict_list_)
             else:
@@ -506,15 +491,10 @@ def stream_etl_wikidata_datadump(
 
             if None not in [embedder, embed_batchsize]:
                 # If batch embedding, then embedding stack of dicts here
-
-                print()
-                print(f'{len(dict_list)=}')
-                print(f'{embed_batchsize=}')
                 if len(dict_list) >= embed_batchsize:
 
                     # l_ is for "line"
                     stmt_from_dict = [l_['statement'] for l_ in dict_list]
-                    print(f'Embedding {len(stmt_from_dict)} statements.')
 
                     stmt_batch = []
                     embeddings_for_dict = []
@@ -522,14 +502,12 @@ def stream_etl_wikidata_datadump(
                         stmt_batch.append(stmt_)
 
                         if len(stmt_batch) >= embed_batchsize:
-                            print(f'{len(stmt_batch)=}')
                             # embedding_ = embedd_jina_api(stmt_from_dict)
                             embedding_ = embedder.encode(stmt_batch)
                             embeddings_for_dict.extend(embedding_)
                             stmt_batch = []
 
                     if len(stmt_batch):
-                        print(f'{len(stmt_batch)=}')
                         # embedding_ = embedd_jina_api(stmt_from_dict)
                         embedding_ = embedder.encode(stmt_batch)
                         embeddings_for_dict.extend(embedding_)
@@ -546,12 +524,8 @@ def stream_etl_wikidata_datadump(
 
             if embed_batchsize is not None:
                 if len(dict_list) < embed_batchsize:
-                    print()
-                    print('Skipping fout.write for now')
-                    print(f'{len(dict_list)=}')
                     continue
 
-            print()
             print(f'Saving {len(dict_list)=} lines to file.')
             for dict_ in dict_list:
                 line_ = ','.join(
@@ -892,12 +866,20 @@ if __name__ == '__main__':
         '--embed', '-e', action='store_true', default=False,
         help='Toggle to activate the embedder process.'
     )
+    parser.add_argument(
+        '--embed_batchsize', '-eb', type=int, default=120,
+        help='Number of Wikidata statements to embed in a single batch.'
+    )
+
     args = parser.parse_args()
 
     IS_DOCKER = is_docker()
     DL_STREAM = os.environ.get('STREAM', False)
     N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
     EMBED = os.environ.get('EMBED', args.embed)
+    EMBED_BATCHSIZE = os.environ.get('EMBED_BATCHSIZE', args.embed_batchsize)
+    if EMBED_BATCHSIZE is not None:
+        EMBED_BATCHSIZE = int(EMBED_BATCHSIZE)
 
     if isinstance(EMBED, str):
         EMBED = EMBED == 'True'
@@ -943,7 +925,7 @@ if __name__ == '__main__':
     do_grab_proplabel = False
     do_grab_valuelabel = False
     qids_only = False
-    embed_batchsize = 120  # Set the batch size for embedding
+    embed_batchsize = EMBED_BATCHSIZE  # Set the batch size for embedding
 
     n_complete = N_COMPLETE
 

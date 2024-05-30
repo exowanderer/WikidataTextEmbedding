@@ -26,6 +26,7 @@ VOLUME /app/csvfiles
 ENV WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN
 ENV N_COMPLETE=$N_COMPLETE
 ENV EMBED=$EMBED
+ENV EMBED_BATCHSIZE=$EMBED_BATCHSIZE
 
 # Run the Python script
 CMD ["python", "wikidata_datadump_textification.py"]
