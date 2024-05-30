@@ -447,6 +447,10 @@ def stream_etl_wikidata_datadump(
 
             n_items = n_items + 1
 
+            if n_complete is not None and n_items > n_complete:
+                # Stop after `n_complete` items to avoid overloaded filesize
+                break
+
             line = line.decode().strip()
 
             if line in {'[', ']'}:
@@ -508,6 +512,7 @@ def stream_etl_wikidata_datadump(
                             stmt_batch = []
 
                     if len(stmt_batch):
+                        print(f'Wrapping up last {len(stmt_batch)} embeddings')
                         # embedding_ = embedd_jina_api(stmt_from_dict)
                         embedding_ = embedder.encode(stmt_batch)
                         embeddings_for_dict.extend(embedding_)
@@ -537,9 +542,10 @@ def stream_etl_wikidata_datadump(
             n_statements = n_statements + len(dict_list)
             dict_list = []
 
-            if n_complete is not None and n_statements > n_complete:
-                # Stop after `n_complete` items to avoid overloaded filesize
-                break
+            # if n_complete is not None and n_statements > n_complete:
+            #     # Stop after `n_complete` statements to avoid overloaded
+            #     # filesize
+            #     break
 
 
 def grep_string_in_file(search_string, file_path):
