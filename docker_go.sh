@@ -8,5 +8,6 @@ docker run -it \
         -v $(pwd)/sqlitedbs:/app/sqlitedbs \
         -e WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN \
         -e N_COMPLETE=100 \
+        -e EMBED=False \
         wikidata_datadump_textification
 

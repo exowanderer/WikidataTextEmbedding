@@ -24,5 +24,5 @@ ENV N_COMPLETE=$N_COMPLETE
 ENV EMBED=$EMBED
 
 # Run the Python script
-# CMD ["python", "wikidata_datadump_textification.py"]
-CMD ["python", "post_process_embed_df.py"]
+CMD ["python", "wikidata_datadump_textification.py"]
+# CMD ["python", "post_process_embed_df.py"]

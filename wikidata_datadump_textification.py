@@ -300,8 +300,8 @@ class WikidataRESTAPI:
 
 
 def entity_to_statements(
-        entity, conn=None, embedder=None, do_grab_proplabel=False, lang='en',
-        do_grab_valuelabel=False):
+        entity, conn=None, embedder=None, lang='en',
+        do_grab_proplabel=False, do_grab_valuelabel=False):
 
     if lang not in entity['descriptions'].keys():
         return []
@@ -432,14 +432,16 @@ def entity_to_statements(
 
 
 def stream_etl_wikidata_datadump(
-        in_filepath, fout, conn=None, embedder=None, lang='en', n_complete=None,
-        do_grab_proplabel=False, do_grab_valuelabel=False, qids_only=False):
+        in_filepath, fout, conn=None, embedder=None, embed_batchsize=None,
+        lang='en', n_complete=None, do_grab_proplabel=False,
+        do_grab_valuelabel=False, qids_only=False):
+
+    if embed_batchsize is not None:
+        dict_list = []  # batching statements before embedding
 
     n_items = n_items if 'n_items' in locals() else 0
     n_statements = n_statements if 'n_statements' in locals() else 0
-    # n_has_sitelinks = n_has_sitelinks if 'n_has_sitelinks' in locals() else 0
-    # n_has_datavalue = n_has_datavalue if 'n_has_datavalue' in locals() else 0
-    # n_has_en_desc = n_has_en_desc if 'n_has_en_desc' in locals() else 0
+
     print(f'Starting urlopen from {in_filepath}')
     with urlopen(in_filepath) as stream, bz2.BZ2File(stream) as file:
         pbar = tqdm(enumerate(file))
@@ -448,15 +450,6 @@ def stream_etl_wikidata_datadump(
                 f'Counters: '
                 f'n_items {n_items}'
                 f' - n_statements: {n_statements}'
-                # f' - avg_time_prop: {time_to_prop / (n_statements+1)}'
-                # f' - avg_time_item: {time_to_item / (n_statements+1)}'
-                # f': {n_statements/(n_items+1):0.1f}/item'
-                # f' - n_has_sitelinks {n_has_sitelinks}:'
-                # f': {n_has_sitelinks/(n_statements+1)*100:0.1f}%'
-                # f' - n_has_datavalue {n_has_sitelinks}:'
-                # f': {n_has_datavalue/(n_statements+1)*100:0.1f}%'
-                # f' - n_has_en_desc {n_has_sitelinks}:'
-                # f': {n_has_en_desc/(n_statements+1)*100:0.1f}%'
             )
 
             pbar.set_description(pbar_desc)
@@ -484,12 +477,7 @@ def stream_etl_wikidata_datadump(
                 continue
 
             qid_ = entity['id']
-            """
-                check_qid_exists = grep_string_in_file(f'{qid_},', fout.name)
-                if check_qid_exists:
-                    # Skip if QID already exists in the file
-                    continue
-                """
+
             item_desc = entity['descriptions'][lang]['value']
 
             # n_has_sitelinks = n_has_sitelinks + 1
@@ -499,21 +487,53 @@ def stream_etl_wikidata_datadump(
                 continue
 
             # dict_vecdb.append(vecdb_line_)
-            dict_list = entity_to_statements(
+            dict_list_ = entity_to_statements(
                 entity,
                 lang=lang,
                 conn=conn,
-                embedder=embedder,
+                # If batch embedding, then avoid line by line embedding
+                embedder=embedder if embed_batchsize is not None else None,
+                embed_batchsize=embed_batchsize,
                 do_grab_proplabel=do_grab_proplabel,
                 do_grab_valuelabel=do_grab_valuelabel
             )
 
+            if embed_batchsize is not None:
+                dict_list.extend(dict_list_)
+            else:
+                dict_list = dict_list_
+
+            if None not in [embedder, embed_batchsize]:
+                # If batch embedding, then embedding stack of dicts here
+                if len(dict_list) >= embed_batchsize:
+                    stmt_batch = [line_['statement'] for line_ in dict_list]
+
+                    # embedding_ = embedd_jina_api(stmt_batch)
+                    embedding_ = embedder.encode(stmt_batch)
+
+                    dict_list_out = []
+                    for line_, embed_ in zip(dict_list, embedding_):
+                        line_['embedding'] = embed_
+                        dict_list_out.append(line_)
+
+                    # Reset variable pointer and remove extra MEM usage
+                    dict_list = dict_list_out
+                    del dict_list_out
+
+            if embed_batchsize is not None:
+                if len(dict_list) < embed_batchsize:
+                    continue
+
             for dict_ in dict_list:
-                line_ = ','.join([f'"{item_}"' for item_ in dict_.values()])
+                line_ = ','.join(
+                    [f'"{item_}"' for item_ in dict_.values()]
+                )
                 line_ = f'{line_}\n'
                 fout.write(line_)
 
             n_statements = n_statements + len(dict_list)
+            dict_list = []
+
             if n_complete is not None and n_statements > n_complete:
                 # Stop after `n_complete` items to avoid overloaded filesize
                 break
@@ -758,8 +778,8 @@ def sparql_list_all_pid_labels(
 def process_wikidata_dump(
         out_filepath, in_filepath,
         db_name='sqlitedbs/wikidata_qid_pid_labels.db',
-        embedder=None, lang='en', n_complete=None, do_grab_proplabel=False,
-        do_grab_valuelabel=False, qids_only=False):
+        embedder=None, embed_batchsize=None, lang='en', n_complete=None,
+        do_grab_proplabel=False, do_grab_valuelabel=False, qids_only=False):
 
     full_header = (
         'qid,pid,value,'
@@ -786,6 +806,7 @@ def process_wikidata_dump(
             fout=fout,
             conn=conn,
             embedder=embedder,
+            embed_batchsize=embed_batchsize,
             lang=lang,
             n_complete=n_complete,
             do_grab_proplabel=do_grab_proplabel,
@@ -890,7 +911,8 @@ if __name__ == '__main__':
     do_grab_proplabel = False
     do_grab_valuelabel = False
     qids_only = False
-    embed_batchsize = 120
+    embed_batchsize = 120  # Set the batch size for embedding
+
     n_complete = N_COMPLETE
 
     if qids_only:
@@ -924,17 +946,10 @@ if __name__ == '__main__':
         in_filepath=wikidata_datadump_path,
         db_name=db_name,
         embedder=None,  # Test post-process embedding
+        embed_batchsize=embed_batchsize,
         lang=lang,
         n_complete=n_complete,
         do_grab_proplabel=do_grab_proplabel,
         do_grab_valuelabel=do_grab_valuelabel,
         qids_only=qids_only
     )
-
-    """
-    Experiment Log: Stardate 2024.134
-    Counters: n_items 1409344 : : 1409345it [23:44, 989.07it/s] - linear
-    Counters: n_items 636277 : : 636277it [1:20:44, 131.12it/s] - ThreadPool prop
-    Counters: n_items 1163626 : : 1163627it [24:14, 799.98it/s] - linear again
-    Counters: n_items 2053703 - n_statements: 22371336: : 2053703it [31:46, 1077.46it/s] - linear again
-    """

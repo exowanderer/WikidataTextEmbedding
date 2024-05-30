@@ -7,6 +7,16 @@ from time import time
 from tqdm import tqdm
 
 
+try:
+    from google.colab import userdata, drive
+    drive.mount('/content/drive')
+
+    USE_LOCAL = False
+except Exception as e:
+    print('USE_LOCAL = True')
+    USE_LOCAL = True
+
+
 def is_docker():
     """Check if the script is running inside a Docker container."""
     # Check for .dockerenv file
