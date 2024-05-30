@@ -414,6 +414,7 @@ def entity_to_statements(
 
                 embedding_ = None
                 if embedder is not None:
+                    print(f'Embedding single statement')
                     # embedding_ = embedd_jina_api(statement_)
                     embedding_ = embedder.encode(statement_)
 
@@ -492,12 +493,12 @@ def stream_etl_wikidata_datadump(
                 lang=lang,
                 conn=conn,
                 # If batch embedding, then avoid line by line embedding
-                embedder=embedder if embed_batchsize is not None else None,
-                embed_batchsize=embed_batchsize,
+                embedder=embedder if embed_batchsize is None else None,
                 do_grab_proplabel=do_grab_proplabel,
                 do_grab_valuelabel=do_grab_valuelabel
             )
-
+            print()
+            print(f'{len(dict_list_)=}')
             if embed_batchsize is not None:
                 dict_list.extend(dict_list_)
             else:
@@ -505,14 +506,37 @@ def stream_etl_wikidata_datadump(
 
             if None not in [embedder, embed_batchsize]:
                 # If batch embedding, then embedding stack of dicts here
-                if len(dict_list) >= embed_batchsize:
-                    stmt_batch = [line_['statement'] for line_ in dict_list]
 
-                    # embedding_ = embedd_jina_api(stmt_batch)
-                    embedding_ = embedder.encode(stmt_batch)
+                print()
+                print(f'{len(dict_list)=}')
+                print(f'{embed_batchsize=}')
+                if len(dict_list) >= embed_batchsize:
+
+                    # l_ is for "line"
+                    stmt_from_dict = [l_['statement'] for l_ in dict_list]
+                    print(f'Embedding {len(stmt_from_dict)} statements.')
+
+                    stmt_batch = []
+                    embeddings_for_dict = []
+                    for stmt_ in tqdm(stmt_from_dict):
+                        stmt_batch.append(stmt_)
+
+                        if len(stmt_batch) >= embed_batchsize:
+                            print(f'{len(stmt_batch)=}')
+                            # embedding_ = embedd_jina_api(stmt_from_dict)
+                            embedding_ = embedder.encode(stmt_batch)
+                            embeddings_for_dict.extend(embedding_)
+                            stmt_batch = []
+
+                    if len(stmt_batch):
+                        print(f'{len(stmt_batch)=}')
+                        # embedding_ = embedd_jina_api(stmt_from_dict)
+                        embedding_ = embedder.encode(stmt_batch)
+                        embeddings_for_dict.extend(embedding_)
+                        stmt_batch = []
 
                     dict_list_out = []
-                    for line_, embed_ in zip(dict_list, embedding_):
+                    for line_, embed_ in zip(dict_list, embeddings_for_dict):
                         line_['embedding'] = embed_
                         dict_list_out.append(line_)
 
@@ -522,8 +546,13 @@ def stream_etl_wikidata_datadump(
 
             if embed_batchsize is not None:
                 if len(dict_list) < embed_batchsize:
+                    print()
+                    print('Skipping fout.write for now')
+                    print(f'{len(dict_list)=}')
                     continue
 
+            print()
+            print(f'Saving {len(dict_list)=} lines to file.')
             for dict_ in dict_list:
                 line_ = ','.join(
                     [f'"{item_}"' for item_ in dict_.values()]
@@ -868,7 +897,10 @@ if __name__ == '__main__':
     IS_DOCKER = is_docker()
     DL_STREAM = os.environ.get('STREAM', False)
     N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
-    EMBED = bool(os.environ.get('EMBED', args.embed))
+    EMBED = os.environ.get('EMBED', args.embed)
+
+    if isinstance(EMBED, str):
+        EMBED = EMBED == 'True'
 
     embedder = None
     if EMBED:  # and 'embedder' not in locals()
@@ -945,7 +977,7 @@ if __name__ == '__main__':
         out_filepath=out_filepath,
         in_filepath=wikidata_datadump_path,
         db_name=db_name,
-        embedder=None,  # Test post-process embedding
+        embedder=embedder,  # Test post-process embedding
         embed_batchsize=embed_batchsize,
         lang=lang,
         n_complete=n_complete,
