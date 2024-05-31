@@ -3,7 +3,7 @@ docker build -t wikidata_datadump_textification .
 
 # Run the Docker container with the environment variable and volume mounting
 docker run -it \
-        -v /home/jofr/Research/Wikidata:/app/datadump \
+        -v $HOME/Research/Wikidata:/app/datadump \
         -v $(pwd)/csvfiles:/app/csvfiles \
         -v $(pwd)/sqlitedbs:/app/sqlitedbs \
         -v $HOME/.cache/huggingface/hub:/root/.cache/huggingface/hub \
