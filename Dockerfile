@@ -5,25 +5,25 @@ FROM python:3.9-slim
 RUN pip install --upgrade pip
 
 # setup user to avoid root vs user conflicts
-# RUN adduser -D localuser
-RUN useradd -ms /bin/bash localuser
-USER localuser
+# RUN adduser -D dockeruser
+RUN useradd -ms /bin/bash dockeruser
+USER dockeruser
 
 # Set the working directory in the container
-WORKDIR /home/localuser
+WORKDIR /home/dockeruser
 
 # Copy the requirements file into the container
-COPY --chown=localuser:localuser requirements.txt requirements.txt
+COPY --chown=dockeruser:dockeruser requirements.txt requirements.txt
 
 # Install the dependencies
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Set path to include local user bin
-ENV PATH="/home/localuser/.local/bin:${PATH}"
+ENV PATH="/home/dockeruser/.local/bin:${PATH}"
 
 # Copy the rest of the application code into the container
-COPY --chown=localuser:localuser ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
-COPY --chown=localuser:localuser ./post_process_embed_df.py ./post_process_embed_df.py
+COPY --chown=dockeruser:dockeruser ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
+COPY --chown=dockeruser:dockeruser ./post_process_embed_df.py ./post_process_embed_df.py
 
 # Create a volume to store the output CSV files
 VOLUME /app/csvfiles

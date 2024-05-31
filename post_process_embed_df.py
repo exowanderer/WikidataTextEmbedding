@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
     csv_filename = 'wikidata_vectordb_datadump_100000_en.csv'
     if IS_DOCKER:
-        csv_filepath = (f'/app/csvfiles/{csv_filename}')
+        csv_filepath = (f'/home/dockeruser/csvfiles/{csv_filename}')
     else:
         csv_filepath = (f'./csvfiles/{csv_filename}')
 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
     outfilename = 'wikidata_vectordb_datadump_100000_embedded_en.csv'
     if IS_DOCKER:
-        out_filepath = (f'/app/csvfiles/{outfilename}')
+        out_filepath = (f'/home/dockeruser/csvfiles/{outfilename}')
     else:
         out_filepath = (f'./csvfiles/{outfilename}')
 
