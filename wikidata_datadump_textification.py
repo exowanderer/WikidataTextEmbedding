@@ -519,7 +519,7 @@ def stream_etl_wikidata_datadump(
                             stmt_batch = []
 
                     if len(stmt_batch):
-                        print(f'Wrapping up last {len(stmt_batch)} embeddings')
+                        # print(f'Wrapping up last {len(stmt_batch)} embeddings')
                         # embedding_ = embedd_jina_api(stmt_from_dict)
                         embedding_ = embedder.encode(stmt_batch)
                         embeddings_for_dict.extend(embedding_)
