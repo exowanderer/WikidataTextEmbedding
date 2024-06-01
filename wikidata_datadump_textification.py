@@ -538,7 +538,7 @@ def stream_etl_wikidata_datadump(
                 if len(dict_list) < embed_batchsize:
                     continue
 
-            print(f'Saving {len(dict_list)=} lines to file.')
+            # print(f'Saving {len(dict_list)=} lines to file.')
             for dict_ in dict_list:
                 line_ = ','.join(
                     [f'"{item_}"' for item_ in dict_.values()]
