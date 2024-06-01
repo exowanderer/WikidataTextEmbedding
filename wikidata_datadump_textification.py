@@ -906,7 +906,7 @@ if __name__ == '__main__':
         )
     elif IS_DOCKER:
         wikidata_datadump_path = (
-            f'file:///home/dockeruser/datadump/{wikidata_datadump_filename}'
+            f'file:///app/datadump/{wikidata_datadump_filename}'
         )
     else:
         wikidata_datadump_path = (
@@ -917,7 +917,7 @@ if __name__ == '__main__':
     out_filename = 'wikidata_vectordb_datadump_XYZ_en.csv'
 
     if IS_DOCKER:
-        out_filedir = '/home/dockeruser/csvfiles/'
+        out_filedir = '/app/csvfiles/'
 
     out_filepath = os.path.join(out_filedir, out_filename)
 
@@ -925,7 +925,7 @@ if __name__ == '__main__':
 
     if IS_DOCKER:
         print("Running inside a Docker container.")
-        db_name = f'/home/dockeruser/{db_name}'
+        db_name = f'/app/{db_name}'
 
     lang = 'en'
     do_grab_proplabel = False
