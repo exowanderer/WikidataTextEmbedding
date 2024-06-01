@@ -13,3 +13,5 @@ docker run -it \
         -e EMBED_BATCHSIZE=100 \
         wikidata_datadump_textification
 
+# --gpus all \
+
