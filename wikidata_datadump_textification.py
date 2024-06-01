@@ -9,6 +9,7 @@ import urllib  # For opening and reading URLs.
 import sqlite3
 import subprocess
 import sys
+import torch
 
 from sentence_transformers import SentenceTransformer
 from multiprocessing import cpu_count
@@ -17,6 +18,12 @@ from SPARQLWrapper import SPARQLWrapper, JSON
 from time import time
 from tqdm import tqdm
 from urllib.request import urlopen
+
+try:
+    GPU_AVAILABLE = torch.cuda.is_available()
+    print(f'{GPU_AVAILABLE=}')
+except:
+    GPU_AVAILABLE = False
 
 try:
     from google.colab import userdata, drive

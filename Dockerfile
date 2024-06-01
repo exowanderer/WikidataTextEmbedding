@@ -12,6 +12,9 @@ COPY requirements.txt requirements.txt
 
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu118
+#  torchvision torchaudio
+
 
 # Copy the rest of the application code into the container
 COPY ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
