@@ -851,6 +851,7 @@ def process_wikidata_dump(
             header = 'qid,label\n' if qids_only else full_header
             fout.write(header)
 
+    start = time()
     with open(out_filepath, 'a') as fout, sqlite3.connect(db_name) as conn:
         stream_etl_wikidata_datadump(
             in_filepath=in_filepath,
@@ -864,6 +865,8 @@ def process_wikidata_dump(
             do_grab_valuelabel=do_grab_valuelabel,
             qids_only=qids_only
         )
+
+    print(f'Embedding store took {time() - start} seconds.')
 
 
 def fetch_wikidata_labels(limit=10000, offset=0):
