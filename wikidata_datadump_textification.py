@@ -557,10 +557,11 @@ def stream_etl_wikidata_datadump(
                     dict_list = dict_list_out
                     del dict_list_out
 
-            if embed_batchsize is not None and len(dict_list) < embed_batchsize:
+            if embed_batchsize is not None:
                 # If dict_list len is less than embed_batchsize
                 #   continue to next iteration without saving yet
-                continue
+                if len(dict_list) < embed_batchsize:
+                    continue
 
             # print(f'Saving {len(dict_list)=} lines to file.')
             for dict_ in dict_list:
