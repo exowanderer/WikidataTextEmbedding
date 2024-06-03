@@ -836,7 +836,7 @@ def process_wikidata_dump(
             'statement,embedding\n'
         )
 
-        with open(out_filepath, 'w', newline='') as fout:
+        with open(out_filepath, 'w') as fout:  # , newline=''
             header = 'qid,label\n' if qids_only else full_header
             fout.write(header)
 
