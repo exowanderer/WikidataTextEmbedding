@@ -476,8 +476,7 @@ def embed_statements(dict_list):
         dict_list_out.append(line_)
 
     # Reset variable pointer and remove extra MEM usage
-    dict_list = dict_list_out
-    del dict_list_out
+    return dict_list_out
 
 
 def write_dict_list_to_file(dict_list, fout):
