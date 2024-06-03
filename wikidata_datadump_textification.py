@@ -76,6 +76,29 @@ def embedd_jina_api(statement):
     )['data'][0]['embedding']
 
 
+def push_datastax_api(statements):
+
+    url = 'https://api.jina.ai/v1/embeddings'
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': (
+            'Bearer '
+            'jina_a5115787a3624a52a1841a5c90bda2d494No-PfR74durwpOSX0waSUjI02m'
+        )
+    }
+
+    data = {
+        'input': [statement],
+        'model': 'jina-embeddings-v2-base-en'
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    return json.loads(
+        response.content.decode('utf-8')
+    )['data'][0]['embedding']
+
+
 class WikidataRESTAPI:
     # Logger
     @staticmethod
@@ -534,9 +557,10 @@ def stream_etl_wikidata_datadump(
                     dict_list = dict_list_out
                     del dict_list_out
 
-            if embed_batchsize is not None:
-                if len(dict_list) < embed_batchsize:
-                    continue
+            if embed_batchsize is not None and len(dict_list) < embed_batchsize:
+                # If dict_list len is less than embed_batchsize
+                #   continue to next iteration without saving yet
+                continue
 
             # print(f'Saving {len(dict_list)=} lines to file.')
             for dict_ in dict_list:
@@ -797,12 +821,6 @@ def process_wikidata_dump(
         embedder=None, embed_batchsize=None, lang='en', n_complete=None,
         do_grab_proplabel=False, do_grab_valuelabel=False, qids_only=False):
 
-    full_header = (
-        'qid,pid,value,'
-        'item_label,property_label,value_content,'
-        'statement,embedding\n'
-    )
-
     warm_start = False
     if os.path.exists(out_filepath):
         overwrite = confirm_overwrite(out_filepath)
@@ -811,8 +829,14 @@ def process_wikidata_dump(
             sys.exit()
 
     if not warm_start:
-        print(f'Creating Header')
-        with open(out_filepath, 'w') as fout:
+        print('Creating Header')
+        full_header = (
+            'qid,pid,value,'
+            'item_label,property_label,value_content,'
+            'statement,embedding\n'
+        )
+
+        with open(out_filepath, 'w', newline='') as fout:
             header = 'qid,label\n' if qids_only else full_header
             fout.write(header)
 
