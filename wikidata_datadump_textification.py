@@ -448,6 +448,48 @@ def entity_to_statements(
     return dict_list
 
 
+def embed_statements(dict_list):
+    # l_ is for "line"
+    stmt_from_dict = [l_['statement'] for l_ in dict_list]
+
+    stmt_batch = []
+    embeddings_for_dict = []
+    for stmt_ in tqdm(stmt_from_dict):
+        stmt_batch.append(stmt_)
+
+        if len(stmt_batch) >= embed_batchsize:
+            # embedding_ = embedd_jina_api(stmt_from_dict)
+            embedding_ = embedder.encode(stmt_batch)
+            embeddings_for_dict.extend(embedding_)
+            stmt_batch = []
+
+    if len(stmt_batch):
+        # print(f'Wrapping up last {len(stmt_batch)} embeddings')
+        # embedding_ = embedd_jina_api(stmt_from_dict)
+        embedding_ = embedder.encode(stmt_batch)
+        embeddings_for_dict.extend(embedding_)
+        stmt_batch = []
+
+    dict_list_out = []
+    for line_, embed_ in zip(dict_list, embeddings_for_dict):
+        line_['embedding'] = embed_
+        dict_list_out.append(line_)
+
+    # Reset variable pointer and remove extra MEM usage
+    dict_list = dict_list_out
+    del dict_list_out
+
+
+def write_dict_list_to_file(dict_list, fout):
+    # print(f'Saving {len(dict_list)=} lines to file.')
+    for dict_ in dict_list:
+        line_ = ','.join(
+            [f'"{item_}"' for item_ in dict_.values()]
+        )
+        line_ = f'{line_}\n'
+        fout.write(line_)
+
+
 def stream_etl_wikidata_datadump(
         in_filepath, fout, conn=None, embedder=None, embed_batchsize=None,
         lang='en', n_complete=None, do_grab_proplabel=False,
@@ -478,6 +520,11 @@ def stream_etl_wikidata_datadump(
             n_items = n_items + 1
 
             if n_complete is not None and n_items > n_complete:
+                if None not in [embedder, embed_batchsize] and len(dict_list):
+                    # If batch embedding, then embed stack of dicts here
+                    dict_list = embed_statements(dict_list)
+                    write_dict_list_to_file(dict_list, fout)
+
                 # Stop after `n_complete` items to avoid overloaded filesize
                 break
 
@@ -524,52 +571,16 @@ def stream_etl_wikidata_datadump(
                 dict_list = dict_list_
 
             if None not in [embedder, embed_batchsize]:
-                # If batch embedding, then embedding stack of dicts here
+                # If batch embedding, then embed stack of dicts here
                 if len(dict_list) >= embed_batchsize:
+                    dict_list = embed_statements(dict_list)
 
-                    # l_ is for "line"
-                    stmt_from_dict = [l_['statement'] for l_ in dict_list]
-
-                    stmt_batch = []
-                    embeddings_for_dict = []
-                    for stmt_ in tqdm(stmt_from_dict):
-                        stmt_batch.append(stmt_)
-
-                        if len(stmt_batch) >= embed_batchsize:
-                            # embedding_ = embedd_jina_api(stmt_from_dict)
-                            embedding_ = embedder.encode(stmt_batch)
-                            embeddings_for_dict.extend(embedding_)
-                            stmt_batch = []
-
-                    if len(stmt_batch):
-                        # print(f'Wrapping up last {len(stmt_batch)} embeddings')
-                        # embedding_ = embedd_jina_api(stmt_from_dict)
-                        embedding_ = embedder.encode(stmt_batch)
-                        embeddings_for_dict.extend(embedding_)
-                        stmt_batch = []
-
-                    dict_list_out = []
-                    for line_, embed_ in zip(dict_list, embeddings_for_dict):
-                        line_['embedding'] = embed_
-                        dict_list_out.append(line_)
-
-                    # Reset variable pointer and remove extra MEM usage
-                    dict_list = dict_list_out
-                    del dict_list_out
-
-            if embed_batchsize is not None:
+            if embed_batchsize is not None and len(dict_list) < embed_batchsize:
                 # If dict_list len is less than embed_batchsize
                 #   continue to next iteration without saving yet
-                if len(dict_list) < embed_batchsize:
-                    continue
+                continue
 
-            # print(f'Saving {len(dict_list)=} lines to file.')
-            for dict_ in dict_list:
-                line_ = ','.join(
-                    [f'"{item_}"' for item_ in dict_.values()]
-                )
-                line_ = f'{line_}\n'
-                fout.write(line_)
+            write_dict_list_to_file(dict_list, fout)
 
             n_statements = n_statements + len(dict_list)
             dict_list = []
