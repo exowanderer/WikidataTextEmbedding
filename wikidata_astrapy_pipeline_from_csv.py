@@ -4,6 +4,7 @@ import pandas as pd
 import ast
 import uuid
 
+from tqdm import tqdm
 # Initialize the DataStax Astra client
 
 api_url_id = '06f1a9fe-dd6f-442a-ad75-0bada82c97ea'
@@ -22,7 +23,7 @@ collection = database.get_collection("testwikidata")
 
 
 def convert_vector(vector_str):
-    print(f'{vector_str=}')
+    # print(f'{vector_str=}')
 
     vector_str = vector_str.replace(' ', ',')
     while ',,' in vector_str:
@@ -70,7 +71,7 @@ def batch_insert_documents(collection, documents):
 
 
 def upload_csv_to_astra(csv_file, chunk_size=1000):
-    for chunk in pd.read_csv(csv_file, chunksize=chunk_size):
+    for chunk in tqdm(pd.read_csv(csv_file, chunksize=chunk_size)):
         documents = [generate_document(row) for index, row in chunk.iterrows()]
         # batch_insert_documents(collection, documents)
         print(f"Inserted {len(documents)} documents")
