@@ -59,7 +59,7 @@ def upload_csv_to_astra(csv_file, chunk_size=1000):
 
 
 # Path to the CSV file
-csv_file_path = '/path/to/your/csv_file.csv'
+csv_file_path = './csvfiles/wikidata_vectordb_datadump_1000_en.csv'
 
 # Upload the CSV data to Astra DB
 upload_csv_to_astra(csv_file_path)
