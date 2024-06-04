@@ -1,4 +1,5 @@
 import astrapy
+import numpy as np
 import pandas as pd
 import ast
 import uuid
@@ -21,10 +22,16 @@ collection = database.get_collection("testwikidata")
 
 
 def convert_vector(vector_str):
+    print(f'{type(vector_str)=}')
     if isinstance(vector_str, str):
         return [float(x) for x in ast.literal_eval(vector_str)]
     elif isinstance(vector_str, float):
         return [vector_str]
+    elif isinstance(vector_str, np.array):
+        return list(vector_str)
+    else:
+        print(f'{type(vector_str)=}')
+        return vector_str
 
 
 # Function to generate documents from CSV rows
