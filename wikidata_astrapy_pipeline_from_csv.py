@@ -55,7 +55,8 @@ def generate_document(row):
         "property_label": row["property_label"],
         "value_content": row["value_content"],
         "statement": row["statement"],
-        "vector": convert_vector(row["embedding"])  # Convert string to vector
+        # Convert string to vector
+        "embedding": convert_vector(row["embedding"])
     }
 
 # Batch insert documents into the collection
