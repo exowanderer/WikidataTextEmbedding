@@ -28,6 +28,8 @@ def convert_vector(vector_str):
     while ',,' in vector_str:
         vector_str = vector_str.replace(',,', ',')
 
+    vector_str = vector.replace('[,', '[').replace(',]', ']')
+
     if isinstance(vector_str, str):
         return [float(x) for x in ast.literal_eval(vector_str)]
     elif isinstance(vector_str, float):
@@ -70,7 +72,7 @@ def batch_insert_documents(collection, documents):
 def upload_csv_to_astra(csv_file, chunk_size=1000):
     for chunk in pd.read_csv(csv_file, chunksize=chunk_size):
         documents = [generate_document(row) for index, row in chunk.iterrows()]
-        batch_insert_documents(collection, documents)
+        # batch_insert_documents(collection, documents)
         print(f"Inserted {len(documents)} documents")
 
 
