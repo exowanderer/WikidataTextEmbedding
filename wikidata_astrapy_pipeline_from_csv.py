@@ -22,7 +22,7 @@ collection = database.get_collection("testwikidata")
 
 
 def convert_vector(vector_str):
-    print(f'{type(vector_str)=}')
+    print(f'{vector_str=}')
 
     vector_str = vector_str.replace(' ', ',')
     while ',,' in vector_str:
