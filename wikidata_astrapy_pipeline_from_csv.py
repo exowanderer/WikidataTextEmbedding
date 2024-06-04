@@ -11,9 +11,9 @@ app_token = (
     'NGEpZmLDxaxXJZqdcZJwBCTT:'
     '6e431cc0726e7a95b67fa1112c2e8a276bdf1975709d0e2b1e9f5df8b199b849'
 )
-client = astrapy.DataAPIClient("AstraCS:{app_token}")
+client = astrapy.DataAPIClient(f"AstraCS:{app_token}")
 database = client.get_database_by_api_endpoint(
-    "https://{api_url_id}-eu-west-1.apps.astra.datastax.com"
+    f"https://{api_url_id}-eu-west-1.apps.astra.datastax.com"
 )
 collection = database.get_collection("testwikidata")
 
