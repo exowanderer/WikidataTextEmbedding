@@ -23,12 +23,13 @@ collection = database.get_collection("testwikidata")
 
 def convert_vector(vector_str):
     print(f'{type(vector_str)=}')
+
+    vector_str = vector_str.replace(' ', ',')
+    while ',,' in vector_str:
+        vector_str = vector_str.replace(',,', ',')
+
     if isinstance(vector_str, str):
-        return [
-            float(x) for x in ast.literal_eval(
-                vector_str.replace(' ', ',').replace(',,', ',')
-            )
-        ]
+        return [float(x) for x in ast.literal_eval(vector_str)]
     elif isinstance(vector_str, float):
         return [vector_str]
     elif isinstance(vector_str, np.array):
