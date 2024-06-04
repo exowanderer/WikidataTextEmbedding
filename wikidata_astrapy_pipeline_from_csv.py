@@ -24,7 +24,9 @@ collection = database.get_collection("testwikidata")
 def convert_vector(vector_str):
     print(f'{type(vector_str)=}')
     if isinstance(vector_str, str):
-        return [float(x) for x in ast.literal_eval(vector_str)]
+        return [
+            float(x) for x in ast.literal_eval(vector_str.replace(' ', ','))
+        ]
     elif isinstance(vector_str, float):
         return [vector_str]
     elif isinstance(vector_str, np.array):
