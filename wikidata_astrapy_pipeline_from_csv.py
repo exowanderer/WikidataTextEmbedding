@@ -28,7 +28,7 @@ def convert_vector(vector_str):
     while ',,' in vector_str:
         vector_str = vector_str.replace(',,', ',')
 
-    vector_str = vector.replace('[,', '[').replace(',]', ']')
+    vector_str = vector_str.replace('[,', '[').replace(',]', ']')
 
     if isinstance(vector_str, str):
         return [float(x) for x in ast.literal_eval(vector_str)]
