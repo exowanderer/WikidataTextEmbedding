@@ -62,19 +62,24 @@ def generate_document(row):
 # Batch insert documents into the collection
 
 
-def batch_insert_documents(collection, documents):
-    collection.insert_many(
-        documents,
-        vectors=[doc["embedding"] for doc in documents]
-    )
+def batch_insert_documents(collection, documents, label=''):
+    try:
+        collection.insert_many(
+            documents,
+            vectors=[doc["embedding"] for doc in documents]
+        )
+    except Exception as err:
+        print(f'Error on Chunk {k}')
+        print(f'Error: {err}')
 
 # Read CSV in chunks and upload to Astra DB
 
 
-def upload_csv_to_astra(csv_file, chunk_size=1000):
-    for chunk in tqdm(pd.read_csv(csv_file, chunksize=chunk_size)):
+def upload_csv_to_astra(csv_file, ch_size=1000):
+    # for k, chunk in tqdm(enumerate(pd.read_csv(csv_file, chunksize=ch_size))):
+    for k, chunk in tqdm(enumerate(pd.read_csv(csv_file))):
         documents = [generate_document(row) for index, row in chunk.iterrows()]
-        batch_insert_documents(collection, documents)
+        batch_insert_documents(collection, documents, label=k)
         # print(f"Inserted {len(documents)} documents")
 
 
