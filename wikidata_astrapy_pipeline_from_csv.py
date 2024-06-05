@@ -97,7 +97,7 @@ def upload_csv_to_astra(csv_file=None, df=None, ch_size=1000):
     elif df is not None:
         iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
         for k, row in tqdm(enumerate(df.iterrows())):
-            documents = [generate_document(row)]
+            documents = [generate_document(row[1])]
             batch_insert_documents(collection, documents, label=k)
 
 
