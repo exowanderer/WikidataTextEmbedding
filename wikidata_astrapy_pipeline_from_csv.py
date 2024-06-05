@@ -69,7 +69,7 @@ def batch_insert_documents(collection, documents, label=''):
             vectors=[doc["embedding"] for doc in documents]
         )
     except Exception as err:
-        print(f'Error on Chunk {k}')
+        print(f'Error on Chunk {label}')
         print(f'Error: {err}')
 
 # Read CSV in chunks and upload to Astra DB
