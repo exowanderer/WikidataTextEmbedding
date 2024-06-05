@@ -87,7 +87,7 @@ def batch_insert_documents(collection, documents, label=''):
 
 def upload_csv_to_astra(csv_file=None, df=None, ch_size=1000):
 
-    if csv_file is not Nont and df is None:
+    if csv_file is not None and df is None:
         iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
         for k, chunk in tqdm(iterator):
             documents = [
