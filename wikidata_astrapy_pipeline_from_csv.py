@@ -107,4 +107,4 @@ csv_file_path = './csvfiles/wikidata_vectordb_datadump_10000_en.csv'
 df = pd.read_csv(csv_file_path)
 
 # Upload the CSV data to Astra DB
-upload_csv_to_astra(df=df, csv_file_path=None, ch_size=1000)
+upload_csv_to_astra(df=df, csv_file=csv_file_path, ch_size=1000)
