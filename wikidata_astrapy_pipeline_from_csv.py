@@ -79,7 +79,15 @@ def batch_insert_documents(collection, documents, label=''):
         print(f'Error on Chunk {label}')
         print(f'Error: {err}')
         with open('deletme', 'a', newline='\n') as fdel:
-            [fdel.write(doc["embedding"]) for doc in documents]
+            for doc in documents:
+                try:
+                    collection.insert_many(
+                        [doc],
+                        vectors=[doc["embedding"]]
+                    )
+                except Exception as err2:
+                    print(f'Inner error: {err2}')
+                    print(f'{doc["embedding"]}')
 
 
 # Read CSV in chunks and upload to Astra DB
