@@ -81,9 +81,11 @@ def batch_insert_documents(collection, documents, label=''):
         with open('deletme', 'a', newline='\n') as fdel:
             for doc in documents:
                 try:
-                    collection.insert_many(
-                        [doc],
-                        vectors=[doc["embedding"]]
+                    # Assign new UUID
+                    doc["_id"] = str(uuid.uuid4())
+                    collection.insert_one(
+                        doc,
+                        vectors=doc["embedding"]
                     )
                 except Exception as err2:
                     print(f'Inner error: {err2}')
