@@ -87,7 +87,7 @@ def batch_insert_documents(collection, documents, label=''):
                     )
                 except Exception as err2:
                     print(f'Inner error: {err2}')
-                    print(f'{doc["embedding"]}')
+                    fdel.write(f'{doc["embedding"]}\n')
 
 
 # Read CSV in chunks and upload to Astra DB
@@ -115,6 +115,9 @@ csv_file_path = './csvfiles/wikidata_vectordb_datadump_10000_en.csv'
 # print(f'Loading {csv_file_path}')
 # df = pd.read_csv(csv_file_path)
 
+# Clear deleteme file
+with open('deletme', 'w', newline='\n') as fdel:
+    fdel.write('')
 
 # Upload the CSV data to Astra DB
-upload_csv_to_astra(df=None, csv_file=csv_file_path, ch_size=10000)
+upload_csv_to_astra(df=None, csv_file=csv_file_path, ch_size=1000)
