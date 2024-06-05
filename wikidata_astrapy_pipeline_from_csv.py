@@ -77,7 +77,7 @@ def batch_insert_documents(collection, documents, label=''):
 
 def upload_csv_to_astra(csv_file, ch_size=1000):
     # for k, chunk in tqdm(enumerate(pd.read_csv(csv_file, chunksize=ch_size))):
-    for k, chunk in tqdm(enumerate(pd.read_csv(csv_file))):
+    for k, chunk in tqdm(enumerate(pd.read_csv(csv_file, chunksize=ch_size))):
         documents = [generate_document(row) for index, row in chunk.iterrows()]
         batch_insert_documents(collection, documents, label=k)
         # print(f"Inserted {len(documents)} documents")
