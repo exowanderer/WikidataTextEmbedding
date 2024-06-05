@@ -22,14 +22,21 @@ collection = database.get_collection("testwikidata")
 # Function to convert vector string to list of floats
 
 
-def convert_vector(vector_str):
-    # print(f'{vector_str=}')
+def vector_str_manipulation(vector_str):
+    while '  ' in vector_str:
+        vector_str = vector_str.replace('  ', ' ')
 
     vector_str = vector_str.replace(' ', ',')
+
     while ',,' in vector_str:
         vector_str = vector_str.replace(',,', ',')
 
-    vector_str = vector_str.replace('[,', '[').replace(',]', ']')
+    return vector_str.replace('[,', '[').replace(',]', ']')
+
+
+def convert_vector(vector_str):
+    # print(f'{vector_str=}')
+    vector_str = vector_str_manipulation(vector_str)
 
     if isinstance(vector_str, str):
         return [float(x) for x in ast.literal_eval(vector_str)]

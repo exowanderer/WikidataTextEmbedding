@@ -482,9 +482,7 @@ def embed_statements(dict_list):
 def write_dict_list_to_file(dict_list, fout):
     # print(f'Saving {len(dict_list)=} lines to file.')
     for dict_ in dict_list:
-        line_ = ','.join(
-            [f'"{item_}"' for item_ in dict_.values()]
-        )
+        line_ = ','.join([f'"{item_}"' for item_ in dict_.values()])
         line_ = f'{line_}\n'
         fout.write(line_)
 
