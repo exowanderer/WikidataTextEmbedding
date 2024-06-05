@@ -85,15 +85,26 @@ def batch_insert_documents(collection, documents, label=''):
 # Read CSV in chunks and upload to Astra DB
 
 
-def upload_csv_to_astra(csv_file, ch_size=1000):
-    for k, chunk in tqdm(enumerate(pd.read_csv(csv_file, chunksize=ch_size))):
-        documents = [generate_document(row) for index, row in chunk.iterrows()]
-        batch_insert_documents(collection, documents, label=k)
-        # print(f"Inserted {len(documents)} documents")
+def upload_csv_to_astra(csv_file=None, df=None, ch_size=1000):
+
+    if csv_file is not Nont and df is None:
+        iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
+        for k, chunk in tqdm(iterator):
+            documents = [
+                generate_document(row) for index, row in chunk.iterrows()
+            ]
+            batch_insert_documents(collection, documents, label=k)
+    elif df is not None:
+        iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
+        for k, row in tqdm(enumerate(df.iterrows())):
+            documents = [generate_document(row)]
+            batch_insert_documents(collection, documents, label=k)
 
 
 # Path to the CSV file
 csv_file_path = './csvfiles/wikidata_vectordb_datadump_10000_en.csv'
 
+df = pd.read_csv(csv_file_path)
+
 # Upload the CSV data to Astra DB
-upload_csv_to_astra(csv_file_path, ch_size=1000)
+upload_csv_to_astra(df=df, csv_file_path=None, ch_size=1000)
