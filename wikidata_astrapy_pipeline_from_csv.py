@@ -85,7 +85,7 @@ def batch_insert_documents(collection, documents, label=''):
                     doc["_id"] = str(uuid.uuid4())
                     collection.insert_one(
                         doc,
-                        vectors=doc["embedding"]
+                        vector=doc["embedding"]
                     )
                 except Exception as err2:
                     print(f'Inner error: {err2}')
