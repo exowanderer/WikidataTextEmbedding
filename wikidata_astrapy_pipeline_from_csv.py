@@ -79,7 +79,7 @@ def batch_insert_documents(collection, documents, label=''):
         print(f'Error on Chunk {label}')
         print(f'Error: {err}')
         with open('deletme', 'a', newline='\n') as fdel:
-            for doc in documents:
+            for doc in tqdm(documents):
                 try:
                     # Assign new UUID
                     doc["_id"] = str(uuid.uuid4())
