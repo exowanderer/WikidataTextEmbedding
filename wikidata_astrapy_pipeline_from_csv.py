@@ -76,6 +76,8 @@ def batch_insert_documents(collection, documents, label=''):
             vectors=[doc["embedding"] for doc in documents]
         )
     except Exception as err:
+        # TODO: introduce recursive looking
+        # batch_insert_documents(collection, documents, label=label)
         print(f'Error on Chunk {label}')
         print(f'Error: {err}')
         uuid_err_counter = 0
