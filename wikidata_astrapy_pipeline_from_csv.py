@@ -89,10 +89,14 @@ def batch_insert_documents(collection, documents, label=''):
                         vector=doc["embedding"]
                     )
                 except Exception as err2:
-                    if 'uuid' not in str(err2).lower():
+                    # uuid_err = "Failed to insert document with _id"
+                    uuid_err = "Document already exists with the given _id"
+
+                    if uuid_err not in str(err2).lower():
                         print(f'Inner error: {err2}')
                     else:
                         uuid_err_counter = uuid_err_counter + 1
+
                     fdel.write(f'{doc["embedding"]},{err},{err2}\n')
 
             print(f'Number of UUID already exists errors: {uuid_err_counter}')
