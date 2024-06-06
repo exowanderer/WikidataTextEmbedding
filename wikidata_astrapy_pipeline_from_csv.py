@@ -54,7 +54,7 @@ def convert_vector(vector_str):
 
 def generate_document(row):
     return {
-        "_id": str(uuid.uuid4()),  # Unique identifier for each document
+        "_id": row["uuid"] if "uuid" in row else str(uuid.uuid4()),
         "qid": row["qid"],
         "pid": row["pid"],
         "value": row["value"],
@@ -116,8 +116,8 @@ def upload_csv_to_astra(csv_file=None, df=None, ch_size=100):
             batch_insert_documents(collection, documents, label=k)
     elif df is not None:
         iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
-        for k, row in tqdm(enumerate(df.iterrows())):
-            documents = [generate_document(row[1])]
+        for k, row in tqdm(df.iterrows()):
+            documents = [generate_document(row)]
             batch_insert_documents(collection, documents, label=k)
 
 

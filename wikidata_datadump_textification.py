@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import requests
 import urllib  # For opening and reading URLs.
+import uuid
 import sqlite3
 import subprocess
 import sys
@@ -435,6 +436,7 @@ def entity_to_statements(
                     embedding_ = embedder.encode(statement_)
 
                 dict_list.append({
+                    'uuid': str(uuid.uuid4()),  # for db uniqueness
                     'qid': qid_,
                     'pid': pid_,
                     'value': value_,
