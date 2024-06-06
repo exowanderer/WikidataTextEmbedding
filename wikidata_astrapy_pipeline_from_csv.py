@@ -89,7 +89,7 @@ def batch_insert_documents(collection, documents, label=''):
                         vector=doc["embedding"]
                     )
                 except Exception as err2:
-                    if 'uuid' not in err2.lower():
+                    if 'uuid' not in str(err2).lower():
                         print(f'Inner error: {err2}')
                     else:
                         uuid_err_counter = uuid_err_counter + 1
