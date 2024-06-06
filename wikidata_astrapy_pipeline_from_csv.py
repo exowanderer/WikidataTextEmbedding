@@ -78,24 +78,30 @@ def batch_insert_documents(collection, documents, label=''):
     except Exception as err:
         print(f'Error on Chunk {label}')
         print(f'Error: {err}')
+        uuid_err_counter = 0
         with open('deletme', 'a', newline='\n') as fdel:
             for doc in tqdm(documents):
                 try:
                     # Assign new UUID
-                    doc["_id"] = str(uuid.uuid4())
+                    # doc["_id"] = str(uuid.uuid4())
                     collection.insert_one(
                         doc,
                         vector=doc["embedding"]
                     )
                 except Exception as err2:
-                    print(f'Inner error: {err2}')
-                    fdel.write(f'{doc["embedding"]}\n')
+                    if 'uuid' not in err2.lower():
+                        print(f'Inner error: {err2}')
+                    else:
+                        uuid_err_counter = uuid_err_counter + 1
+                    fdel.write(f'{doc["embedding"]},{err},{err2}\n')
+
+            print(f'Number of UUID already exists errors: {uuid_err_counter}')
 
 
 # Read CSV in chunks and upload to Astra DB
 
 
-def upload_csv_to_astra(csv_file=None, df=None, ch_size=1000):
+def upload_csv_to_astra(csv_file=None, df=None, ch_size=100):
 
     if csv_file is not None and df is None:
         iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
@@ -122,4 +128,4 @@ with open('deletme', 'w', newline='\n') as fdel:
     fdel.write('')
 
 # Upload the CSV data to Astra DB
-upload_csv_to_astra(df=None, csv_file=csv_file_path, ch_size=1000)
+upload_csv_to_astra(df=None, csv_file=csv_file_path, ch_size=100)
