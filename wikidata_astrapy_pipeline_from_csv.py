@@ -1,28 +1,15 @@
+import ast
 import astrapy
 import numpy as np
+import os
 import pandas as pd
-import ast
 import uuid
 
 from tqdm import tqdm
-# Initialize the DataStax Astra client
-
-api_url_id = '06f1a9fe-dd6f-442a-ad75-0bada82c97ea'
-
-app_token = (
-    'NGEpZmLDxaxXJZqdcZJwBCTT:'
-    '6e431cc0726e7a95b67fa1112c2e8a276bdf1975709d0e2b1e9f5df8b199b849'
-)
-client = astrapy.DataAPIClient(f"AstraCS:{app_token}")
-database = client.get_database_by_api_endpoint(
-    f"https://{api_url_id}-eu-west-1.apps.astra.datastax.com"
-)
-collection = database.get_collection("testwikidata")
-
-# Function to convert vector string to list of floats
 
 
 def vector_str_manipulation(vector_str):
+    # Function to convert vector string to list of floats
     while '  ' in vector_str:
         vector_str = vector_str.replace('  ', ' ')
 
@@ -122,6 +109,17 @@ def upload_csv_to_astra(csv_file=None, df=None, ch_size=100):
             documents = [generate_document(row)]
             batch_insert_documents(collection, documents, label=k)
 
+
+# Initialize the DataStax Astra client
+
+api_url_id = ''
+
+api_url = os.environ.get('ASTRACS_API_URL')
+app_token = os.environ.get('ASTRACS_API_KEY')
+
+client = astrapy.DataAPIClient(app_token)
+database = client.get_database_by_api_endpoint(api_url)
+collection = database.get_collection("testwikidata")
 
 # Path to the CSV file
 csv_file_path = './csvfiles/wikidata_vectordb_datadump_10000_en.csv'
