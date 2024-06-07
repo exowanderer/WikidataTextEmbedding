@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 
 # Copy the rest of the application code into the container
-COPY ./wikidata_datadump_textification.py ./wikidata_datadump_textification.py
+COPY ./wikidata_datadump_item_textification.py ./pipeline.py
 COPY ./post_process_embed_df.py ./post_process_embed_df.py
 
 # ARG FUNCTION_DIR="/var/task"
@@ -35,5 +35,5 @@ ENV EMBED=$EMBED
 ENV EMBED_BATCHSIZE=$EMBED_BATCHSIZE
 
 # Run the Python script
-CMD ["python", "wikidata_datadump_textification.py"]
+CMD ["python", "pipeline.py"]
 # CMD ["python", "post_process_embed_df.py"]
