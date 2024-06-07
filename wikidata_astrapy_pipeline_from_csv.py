@@ -112,8 +112,6 @@ def upload_csv_to_astra(csv_file=None, df=None, ch_size=100):
 
 # Initialize the DataStax Astra client
 
-api_url_id = ''
-
 api_url = os.environ.get('ASTRACS_API_URL')
 app_token = os.environ.get('ASTRACS_API_KEY')
 
