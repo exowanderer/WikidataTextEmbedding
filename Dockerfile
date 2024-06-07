@@ -27,6 +27,7 @@ COPY ./post_process_embed_df.py ./post_process_embed_df.py
 
 # Create a volume to store the output CSV files
 VOLUME /app/csvfiles
+VOLUME /app/datadump
 
 # Set the environment variable inside the Docker container
 ENV WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN
