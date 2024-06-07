@@ -390,7 +390,7 @@ def get_property_label(pid_, conn=None):
     return prop_label.replace('"', "\'")
 
 
-def convert_props_to_string(pid, claimlist):
+def convert_props_to_string(conn, pid, claimlist):
 
     item_str = ''
     for claim_ in claimlist:
@@ -449,7 +449,7 @@ def entity_to_statements(entity, conn=None, lang='en'):
     # item_str = item_str + f'Aliases: ' + ', '.join(aliases) + '\n'
 
     for prop_claims_ in entity['claims'].items():  # tqdm(
-        item_str = item_str + convert_props_to_string(*prop_claims_)
+        item_str = item_str + convert_props_to_string(conn, *prop_claims_)
 
     return {
         'uuid': str(uuid.uuid4()),  # for db uniqueness
