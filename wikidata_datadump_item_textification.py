@@ -429,7 +429,7 @@ def entity_to_statements(entity, conn=None, lang='en'):
 
     qid_label = qid_
     if conn is not None:
-        qid_label = query_label(conn, value, field='qid').replace('"', "\'")
+        qid_label = query_label(conn, qid_, field='qid').replace('"', "\'")
 
     item_desc = entity['descriptions'][lang]['value']
     item_desc = item_desc.replace('"', "\'")
