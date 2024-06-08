@@ -926,7 +926,7 @@ if __name__ == '__main__':
     DL_STREAM = os.environ.get('STREAM', False)
     N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
     EMBED = os.environ.get('EMBED', args.embed)
-    batchsize = os.environ.get('batchsize', args.batchsize)
+    batchsize = os.environ.get('EMBED_BATCHSIZE', args.batchsize)
     if batchsize is not None:
         batchsize = int(batchsize)
 
@@ -986,6 +986,7 @@ if __name__ == '__main__':
         #   {n_complete}_en.csv'
 
     print(f'{out_filepath=}')
+    print(f'{batchsize=}')
 
     """
     pid_labels_filename = 'wikidata_vectordb_datadump_qids_12723_en.csv'
