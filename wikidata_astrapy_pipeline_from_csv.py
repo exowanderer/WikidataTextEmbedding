@@ -39,7 +39,7 @@ def convert_vector(vector_str):
 # Function to generate documents from CSV rows
 
 
-def generate_document(row):
+def generate_statement_document(row):
     return {
         "_id": row["uuid"] if "uuid" in row else str(uuid.uuid4()),
         "qid": row["qid"],
@@ -52,6 +52,29 @@ def generate_document(row):
         # Convert string to vector
         "embedding": convert_vector(row["embedding"])
     }
+
+
+def generate_item_document(row):
+    return {
+        "_id": row["uuid"] if "uuid" in row else str(uuid.uuid4()),
+        "qid": row["qid"],
+        "chunk_id": row["chunk_id"],
+        "qid_chunk": row["qid_chunk"],
+        "n_statements": row["n_statements"],
+        "n_sitelinks": row["n_sitelinks"],
+        "n_descriptions": row["n_descriptions"],
+        "n_lines": row["n_lines"],
+        "item_str": row["item_str"],
+        # Convert string to vector
+        "embedding": convert_vector(row["embedding"])
+    }
+
+
+def generate_document(row, pipeline='item'):
+    if pipeline == 'item':
+        return generate_item_document(row)
+    if pipeline == 'statement':
+        return generate_statement_document(row)
 
 # Batch insert documents into the collection
 
@@ -94,13 +117,14 @@ def batch_insert_documents(collection, documents, label=''):
 # Read CSV in chunks and upload to Astra DB
 
 
-def upload_csv_to_astra(csv_file=None, df=None, ch_size=100):
+def upload_csv_to_astra(csv_file=None, df=None, ch_size=100, pipeline='item'):
 
     if csv_file is not None and df is None:
         iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
         for k, chunk in tqdm(iterator):
             documents = [
-                generate_document(row) for index, row in chunk.iterrows()
+                generate_document(row, pipeline=pipeline)
+                for index, row in chunk.iterrows()
             ]
             batch_insert_documents(collection, documents, label=k)
     elif df is not None:
