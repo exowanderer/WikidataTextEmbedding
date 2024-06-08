@@ -468,24 +468,25 @@ def entity_to_statements(entity, conn=None, lang='en'):
 
 def embed_statements(item_dicts):
     # l_ is for "line"
-    stmt_from_dict = [l_['item_str'] for l_ in item_dicts]
-
+    item_from_dict = [l_['item_str'] for l_ in item_dicts]
+    item_from_dict = item_from_dict[:1]
+    item_from_dict[0] = item_from_dict[0].split('\n')[0]
     item_batch = []
     embeddings_for_dict = []
-    for item_ in tqdm(stmt_from_dict):
+    for item_ in tqdm(item_from_dict):
         item_batch.append(item_)
 
         if len(item_batch) >= batchsize:
             print(f'{len(item_batch)=}')
             print(item_batch)
-            # embedding_ = embedd_jina_api(stmt_from_dict)
+            # embedding_ = embedd_jina_api(item_from_dict)
             embedding_ = embedder.encode(item_batch)
             embeddings_for_dict.extend(embedding_)
             item_batch = []
 
     if len(item_batch):
         # print(f'Wrapping up last {len(item_batch)} embeddings')
-        # embedding_ = embedd_jina_api(stmt_from_dict)
+        # embedding_ = embedd_jina_api(item_from_dict)
         embedding_ = embedder.encode(item_batch)
         embeddings_for_dict.extend(embedding_)
         item_batch = []
@@ -969,6 +970,9 @@ if __name__ == '__main__':
     if IS_DOCKER:
         print("Running inside a Docker container.")
         db_name = f'/app/{db_name}'
+
+    print(f'{db_name=}')
+    print(f'{os.path.exists(db_name)=}')
 
     lang = 'en'
     qids_only = False
