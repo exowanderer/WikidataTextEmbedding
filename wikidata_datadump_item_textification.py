@@ -907,7 +907,7 @@ def process_wikidata_dump(
 
         full_header = (
             'qid,chunk_id,qid_chunk,'
-            'n_statements,n_sitelinks,n_descriptions,n_lines'
+            'n_statements,n_sitelinks,n_descriptions,n_lines,'
             'item_str,uuid,embedding\n'
         )
 
