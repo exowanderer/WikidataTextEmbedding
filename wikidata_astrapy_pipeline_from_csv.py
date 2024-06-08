@@ -190,5 +190,5 @@ if __name__ == '__main__':
         df=None,
         csv_file=csv_file_path,
         ch_size=CHUNKSIZE,
-        PIPELINE=PIPELINE
+        pipeline=PIPELINE
     )
