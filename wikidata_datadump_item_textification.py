@@ -571,12 +571,8 @@ def stream_etl_wikidata_datadump(
 
             if n_complete is not None and n_items > n_complete:
                 if None not in [embedder, batchsize] and len(item_dicts):
-                    print(f'{embedder=}')
-                    print(f'{batchsize=}')
-                    print(f'{len(item_dicts)=}')
                     # If batch embedding, then embed stack of dicts here
                     item_dicts = embed_statements(item_dicts)
-                    print(f'{len(item_dicts)=}')
                     write_dict_list_to_file(item_dicts, fout)
 
                 # Stop after `n_complete` items to avoid overloaded filesize
@@ -611,6 +607,8 @@ def stream_etl_wikidata_datadump(
             item_dict = entity_to_item_chunks(entity, lang=lang, conn=conn)
 
             if batchsize is not None:
+                print('Extending item_dicts')
+                print(f'{item_dict=}')
                 item_dicts.extend(item_dict)
             else:
                 item_dicts = item_dict
