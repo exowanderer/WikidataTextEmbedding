@@ -11,7 +11,7 @@ docker run -it \
         -e N_COMPLETE=1000000 \
         -e EMBED=True \
         -e EMBED_BATCHSIZE=65536 \
-        -e CHUNKSIZE=256 \
+        -e CHUNKSIZE=32 \  # Stay under 8000 bytes
         -e PIPELINE=item \
         -e COLLECTION='testwikidata' \
         --gpus all \
