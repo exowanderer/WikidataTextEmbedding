@@ -422,7 +422,7 @@ def convert_props_to_string(conn, pid, claimlist):
     return item_str
 
 
-def chunk_item_string(item_str, chunksize=100, len_header=2):
+def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
     # Chunking procedure
     chunks_dict = []
     chunks = []
@@ -494,7 +494,7 @@ def entity_to_item_chunks(entity, conn=None, lang='en'):
     for prop_claims_ in entity['claims'].items():  # tqdm(
         item_str = item_str + convert_props_to_string(conn, *prop_claims_)
 
-    return chunk_item_string(item_str)
+    return chunk_item_string(item_str, qid_, chunksize=100, len_header=2)
 
 
 def embed_statements(item_dicts):
