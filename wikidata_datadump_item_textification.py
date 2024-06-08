@@ -961,6 +961,9 @@ if __name__ == '__main__':
     batchsize = os.environ.get('EMBED_BATCHSIZE', args.batchsize)
     chunksize = os.environ.get('CHUNKSIZE', args.chunksize)
 
+    if chunksize is not None:
+        chunksize = int(chunksize)
+
     if batchsize is not None:
         batchsize = int(batchsize)
 
