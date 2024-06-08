@@ -352,6 +352,8 @@ def get_value_label(value, conn=None):
                 value_label = (
                     f'{value_label}_alt{value["altitude"]}'
                 )
+        if 'entity-type' in value and value['entity-type'] == 'item':
+            value = value['id']
 
         if isinstance(value_label, dict):
             if 'entity-type' not in value.keys():

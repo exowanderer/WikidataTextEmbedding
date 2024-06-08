@@ -338,6 +338,7 @@ def entity_to_statements(
         return []
 
     qid_ = entity['id']
+    qid_label = query_label(conn, qid_, field='qid')
     item_desc = entity['descriptions'][lang]['value']
 
     dict_list = []
@@ -422,6 +423,7 @@ def entity_to_statements(
                 if isinstance(value_, str):
                     value_ = value_.replace('"', "\'")
 
+                qid_label = qid_label.replace('"', "\'")
                 item_desc = item_desc.replace('"', "\'")
                 prop_label = prop_label.replace('"', "\'")
                 value_label = value_label.replace('"', "\'")
@@ -440,6 +442,7 @@ def entity_to_statements(
                     'qid': qid_,
                     'pid': pid_,
                     'value': value_,
+                    'qid_label': qid_label,
                     'item_label': item_desc,
                     'property_label': prop_label,
                     'value_content': value_label,
@@ -841,8 +844,8 @@ def process_wikidata_dump(
     if not warm_start:
         print('Creating Header')
         full_header = (
-            'qid,pid,value,'
-            'item_label,property_label,value_content,'
+            'qid,pid,value'
+            'qid_label,item_label,property_label,value_content,'
             'statement,embedding\n'
         )
 
