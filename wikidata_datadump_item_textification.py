@@ -628,6 +628,9 @@ def stream_etl_wikidata_datadump(
                 #   continue to next iteration without saving yet
                 continue
 
+            print(f'\n3: {n_dicts=}')
+            print(f'{batchsize=}')
+            print(f'{n_dicts < batchsize=}')
             write_dict_list_to_file(item_dicts, fout)
 
             n_statements = n_statements + n_dicts
