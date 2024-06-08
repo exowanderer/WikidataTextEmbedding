@@ -466,7 +466,7 @@ def entity_to_statements(entity, conn=None, lang='en'):
     }
 
 
-def embed_statements(item_dicts, chunksize=100, len_header=2):
+def embed_statements(item_dicts, chunksize=1000, len_header=2):
 
     item_from_dict = []
     chunks = []
