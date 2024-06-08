@@ -427,25 +427,25 @@ def chunk_item_string(item_str):
     chunks_dict = []
     chunks = []
     header = ''
-    for item_ in [l_['item_str'] for l_ in item_dicts]:
-        for k, line_ in enumerate(item_.split('\n')):
-            if k < len_header:
-                header = header + f'{line_}\n'
-            else:
-                chunks.append(line_)
+    # for item_ in [l_['item_str'] for l_ in item_dicts]:
+    for k, line_ in enumerate(item_str.split('\n')):
+        if k < len_header:
+            header = header + f'{line_}\n'
+        else:
+            chunks.append(line_)
 
-            if len(chunks) < chunksize:
-                continue
+        if len(chunks) < chunksize:
+            continue
 
-            chunk_str = header + '\n'.join(chunks)
-            chunks_dict.append({
-                'uuid': str(uuid.uuid4()),  # for db uniqueness
-                'qid': qid_,
-                'chunk_id': k,
-                'qid_chunk': f'{qid_}_{k}',
-                'item_str': chunk_str,
-            })
-            chunks = []
+        chunk_str = header + '\n'.join(chunks)
+        chunks_dict.append({
+            'uuid': str(uuid.uuid4()),  # for db uniqueness
+            'qid': qid_,
+            'chunk_id': k,
+            'qid_chunk': f'{qid_}_{k}',
+            'item_str': chunk_str,
+        })
+        chunks = []
 
     if len(chunks):
         chunk_str = header + '\n'.join(chunks)
