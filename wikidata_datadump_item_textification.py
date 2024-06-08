@@ -499,27 +499,34 @@ def entity_to_item_chunks(entity, conn=None, lang='en'):
     return chunk_item_string(item_str, qid_, chunksize=100, len_header=2)
 
 
-def embed_statements(item_dicts):
-
-    item_from_dict = []
+def embed_items(item_dicts):
+    print(f'e1 {len(item_dicts)=}')
+    # item_from_dict = []
 
     item_batch = []
     embeddings_for_dict = []
-    for item_ in tqdm(item_from_dict):
+    for item_ in tqdm(item_dicts):
         item_batch.append(item_)
-
+        print(f'e1 {len(item_batch)=}')
         if len(item_batch) >= batchsize:
+            print(f'e2a {len(item_batch)=}')
             # embedding_ = embedd_jina_api(item_from_dict)
             embedding_ = embedder.encode(item_batch)
             embeddings_for_dict.extend(embedding_)
+            print(f'e2b {len(item_batch)=}')
             item_batch = []
+            print(f'e2c {len(item_batch)=}')
 
     if len(item_batch):
+        print(f'e4 {len(item_batch)=}')
         # print(f'Wrapping up last {len(item_batch)} embeddings')
         # embedding_ = embedd_jina_api(item_from_dict)
         embedding_ = embedder.encode(item_batch)
+        print(f'e5 {len(item_batch)=}')
         embeddings_for_dict.extend(embedding_)
+        print(f'e6 {len(item_batch)=}')
         item_batch = []
+        print(f'e7 {len(item_batch)=}')
 
     dict_list_out = []
     for line_, embed_ in zip(item_dicts, embeddings_for_dict):
@@ -574,7 +581,7 @@ def stream_etl_wikidata_datadump(
                 if None not in [embedder, batchsize] and len(item_dicts):
                     print(f'2b {len(item_dicts)=}')
                     # If batch embedding, then embed stack of dicts here
-                    item_dicts = embed_statements(item_dicts)
+                    item_dicts = embed_items(item_dicts)
                     print(f'2c {len(item_dicts)=}')
                     write_dict_list_to_file(item_dicts, fout)
                     print(f'2d {len(item_dicts)=}')
@@ -620,11 +627,11 @@ def stream_etl_wikidata_datadump(
 
             print(f'4 {len(item_dicts)=}')
             n_dicts = len(item_dicts)
-            print(f'4a {len(n_dicts)=}')
+            print(f'4a {n_dicts=}')
             if None not in [embedder, batchsize] and n_dicts >= batchsize:
                 print(f'4b {len(item_dicts)=}')
                 # If batch embedding, then embed stack of dicts here
-                item_dicts = embed_statements(item_dicts)
+                item_dicts = embed_items(item_dicts)
                 print(f'4c {len(item_dicts)=}')
 
             print(f'5 {len(item_dicts)=}')
