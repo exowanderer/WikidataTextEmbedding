@@ -439,22 +439,24 @@ def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
 
         chunk_str = header + '\n'.join(chunks)
         chunks_dict.append({
-            'uuid': str(uuid.uuid4()),  # for db uniqueness
             'qid': qid_,
             'chunk_id': k,
             'qid_chunk': f'{qid_}_{k}',
             'item_str': chunk_str,
+            'uuid': str(uuid.uuid4()),  # for db uniqueness
+            'embedding': None
         })
         chunks = []
 
     if len(chunks):
         chunk_str = header + '\n'.join(chunks)
         chunks_dict.append({
-            'uuid': str(uuid.uuid4()),  # for db uniqueness
             'qid': qid_,
             'chunk_id': k,
             'qid_chunk': f'{qid_}_{k}',
             'item_str': chunk_str,
+            'uuid': str(uuid.uuid4()),  # for db uniqueness
+            'embedding': None
         })
         chunks = []
 
@@ -870,11 +872,8 @@ def process_wikidata_dump(
 
     if not warm_start:
         print('Creating Header')
-        full_header = (
-            'qid,pid,value,'
-            'item_label,property_label,value_content,'
-            'statement,embedding\n'
-        )
+
+        full_header = 'qid,chunk_id,qid_chunk,item_str,uuid,embedding\n'
 
         with open(out_filepath, 'w', newline='') as fout:  #
             header = 'qid,label\n' if qids_only else full_header
