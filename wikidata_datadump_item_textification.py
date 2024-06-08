@@ -615,13 +615,13 @@ def stream_etl_wikidata_datadump(
             n_dicts = len(item_dicts)
             if None not in [embedder, batchsize] and n_dicts >= batchsize:
                 # If batch embedding, then embed stack of dicts here
-                print(f'1: {n_dicts=}')
+                print(f'\n1: {n_dicts=}')
                 print(f'{batchsize=}')
                 print(f'{n_dicts < batchsize=}')
                 item_dicts = embed_statements(item_dicts)
 
             if batchsize is not None and n_dicts < batchsize:
-                print(f'2: {n_dicts=}')
+                print(f'\n2: {n_dicts=}')
                 print(f'{batchsize=}')
                 print(f'{n_dicts < batchsize=}')
                 # If item_dicts len is less than batchsize
