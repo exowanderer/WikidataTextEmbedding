@@ -135,7 +135,8 @@ def batch_insert_documents(collection, documents, label=''):
 # Read CSV in chunks and upload to Astra DB
 
 
-def upload_csv_to_astra(csv_file=None, df=None, ch_size=100, pipeline='item'):
+def upload_csv_to_astra(
+        collection, csv_file=None, df=None, ch_size=100, pipeline='item'):
 
     if csv_file is not None and df is None:
         iterator = enumerate(pd.read_csv(csv_file, chunksize=ch_size))
@@ -191,8 +192,9 @@ if __name__ == '__main__':
 
     # Upload the CSV data to Astra DB
     upload_csv_to_astra(
+        collection=collection,
         df=None,
         csv_file=csv_file_path,
         ch_size=CHUNKSIZE,
         pipeline=PIPELINE,
-        collection=)
+    )
