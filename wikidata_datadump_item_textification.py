@@ -500,33 +500,25 @@ def entity_to_item_chunks(entity, conn=None, lang='en'):
 
 
 def embed_items(item_dicts):
-    print(f'e1 {len(item_dicts)=}')
+
     # item_from_dict = []
 
     item_batch = []
     embeddings_for_dict = []
     for item_ in tqdm(item_dicts):
         item_batch.append(item_)
-        print(f'e1 {len(item_batch)=}')
         if len(item_batch) >= batchsize:
-            print(f'e2a {len(item_batch)=}')
             # embedding_ = embedd_jina_api(item_from_dict)
             embedding_ = embedder.encode(item_batch)
             embeddings_for_dict.extend(embedding_)
-            print(f'e2b {len(item_batch)=}')
+
             item_batch = []
-            print(f'e2c {len(item_batch)=}')
 
     if len(item_batch):
-        print(f'e4 {len(item_batch)=}')
-        # print(f'Wrapping up last {len(item_batch)} embeddings')
         # embedding_ = embedd_jina_api(item_from_dict)
         embedding_ = embedder.encode(item_batch)
-        print(f'e5 {len(item_batch)=}')
         embeddings_for_dict.extend(embedding_)
-        print(f'e6 {len(item_batch)=}')
         item_batch = []
-        print(f'e7 {len(item_batch)=}')
 
     dict_list_out = []
     for line_, embed_ in zip(item_dicts, embeddings_for_dict):
@@ -538,13 +530,9 @@ def embed_items(item_dicts):
 
 
 def write_dict_list_to_file(item_dicts, fout):
-    # print(f'Saving {len(item_dicts)=} lines to file.')
-    print(f'\n{len(item_dicts)=}')
-    print(f'\n{fout=}')
     for dict_ in item_dicts:
         line_ = ','.join([f'"{item_}"' for item_ in dict_.values()])
         line_ = f'{line_}\n'
-        print(f'\n{line_=}')
         fout.write(line_)
 
 
@@ -554,7 +542,6 @@ def stream_etl_wikidata_datadump(
 
     if batchsize is not None:
         item_dicts = []  # batching statements before embedding
-    print(f'\n0 {len(item_dicts)=}')
     n_items = n_items if 'n_items' in locals() else 0
     n_statements = n_statements if 'n_statements' in locals() else 0
 
@@ -575,16 +562,11 @@ def stream_etl_wikidata_datadump(
             #     continue
 
             n_items = n_items + 1
-            print(f'1 {n_items=}')
             if n_complete is not None and n_items > n_complete:
-                print(f'2a {len(item_dicts)=}')
                 if None not in [embedder, batchsize] and len(item_dicts):
-                    print(f'2b {len(item_dicts)=}')
                     # If batch embedding, then embed stack of dicts here
                     item_dicts = embed_items(item_dicts)
-                    print(f'2c {len(item_dicts)=}')
                     write_dict_list_to_file(item_dicts, fout)
-                    print(f'2d {len(item_dicts)=}')
 
                 # Stop after `n_complete` items to avoid overloaded filesize
                 break
@@ -617,36 +599,24 @@ def stream_etl_wikidata_datadump(
             # dict_vecdb.append(vecdb_line_)
             item_dict = entity_to_item_chunks(entity, lang=lang, conn=conn)
 
-            print(f'3 {len(item_dicts)=}')
             if batchsize is not None:
-                print(f'3a {len(item_dicts)=}')
                 item_dicts.extend(item_dict)
             else:
-                print(f'3b {len(item_dicts)=}')
                 item_dicts = item_dict
 
-            print(f'4 {len(item_dicts)=}')
             n_dicts = len(item_dicts)
-            print(f'4a {n_dicts=}')
             if None not in [embedder, batchsize] and n_dicts >= batchsize:
-                print(f'4b {len(item_dicts)=}')
                 # If batch embedding, then embed stack of dicts here
                 item_dicts = embed_items(item_dicts)
-                print(f'4c {len(item_dicts)=}')
 
-            print(f'5 {len(item_dicts)=}')
             if batchsize is not None and n_dicts < batchsize:
                 # If item_dicts len is less than batchsize
                 #   continue to next iteration without saving yet
                 continue
 
-            print(f'6 {len(item_dicts)=}')
             write_dict_list_to_file(item_dicts, fout)
-            print(f'7 {len(item_dicts)=}')
             n_statements = n_statements + n_dicts
-            print(f'8 {len(item_dicts)=}')
             item_dicts = []
-            print(f'9 {len(item_dicts)=}')
 
 
 def grep_string_in_file(search_string, file_path):
@@ -656,7 +626,6 @@ def grep_string_in_file(search_string, file_path):
             ['grep', '-q', search_string, file_path],
             stderr=subprocess.STDOUT
         )
-        # print(f'{output=}')
         return True
     except subprocess.CalledProcessError as e:
         # grep returns a non-zero exit status if the string is not found
