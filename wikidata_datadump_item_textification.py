@@ -471,7 +471,6 @@ def embed_statements(item_dicts, chunksize=100, len_header=2):
     item_from_dict = []
     chunks = []
     header = ''
-    print(f'{chunksize=}')
     # TODO: Store chunk number in vDB metadata
     # Chunking procedure
     for item_ in [l_['item_str'] for l_ in item_dicts]:
@@ -480,14 +479,12 @@ def embed_statements(item_dicts, chunksize=100, len_header=2):
                 header = header + f'{line_}\n'
             else:
                 chunks.append(line_)
-                print(f'{len(chunks)=}')
 
             if len(chunks) < chunksize:
                 continue
 
             item_out = '\n'.join(chunks)
             item_from_dict.append(header + item_out)
-            print(f'{len(item_from_dict)=}')
             chunks = []
 
     if len(chunks):
@@ -501,8 +498,6 @@ def embed_statements(item_dicts, chunksize=100, len_header=2):
         item_batch.append(item_)
 
         if len(item_batch) >= batchsize:
-            print(f'{len(item_batch)=}')
-            print(item_batch)
             # embedding_ = embedd_jina_api(item_from_dict)
             embedding_ = embedder.encode(item_batch)
             embeddings_for_dict.extend(embedding_)
