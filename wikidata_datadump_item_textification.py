@@ -466,11 +466,35 @@ def entity_to_statements(entity, conn=None, lang='en'):
     }
 
 
-def embed_statements(item_dicts):
-    # l_ is for "line"
-    item_from_dict = [l_['item_str'] for l_ in item_dicts]
-    item_from_dict = item_from_dict[:1]
-    item_from_dict[0] = item_from_dict[0].split('\n')[0]
+def embed_statements(item_dicts, chunksize=10, len_header=2):
+
+    item_from_dict = []
+    chunks = []
+    header = ''
+
+    # TODO: Store chunk number in vDB metadata
+    # Chunking procedure
+    for k, item_ in enumerate(l_['item_str'] for l_ in item_dicts):
+        lines_ = item_.split('\n')
+
+        for line_ in lines_:
+            if k < len_header:
+                header = header + f'{line_}\n'
+            else:
+                chunks.append(line_)
+
+            if len(chunks) < chunksize:
+                continue
+
+            item_out = '\n'.join(chunks)
+            item_from_dict.append(header + item_out)
+            chunks = []
+
+    if len(chunks):
+        item_out = '\n'.join(chunks)
+        item_from_dict.append(header + item_out)
+        chunks = []
+
     item_batch = []
     embeddings_for_dict = []
     for item_ in tqdm(item_from_dict):
