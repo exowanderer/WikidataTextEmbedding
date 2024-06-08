@@ -482,6 +482,7 @@ def embed_statements(item_dicts, chunksize=1000, len_header=2):
                 header = header + f'{line_}\n'
             else:
                 chunks.append(line_)
+                print(f'{len(chunks)=}')
 
             if len(chunks) < chunksize:
                 print(f'{len(chunks)=}')
