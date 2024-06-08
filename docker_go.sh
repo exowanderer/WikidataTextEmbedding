@@ -11,5 +11,6 @@ docker run -it \
         -e N_COMPLETE=100 \
         -e EMBED=True \
         -e EMBED_BATCHSIZE=1 \
+        -e CHUNKSIZE=100 \
         -e PIPELINE=item \
         wikidata_datadump_textification

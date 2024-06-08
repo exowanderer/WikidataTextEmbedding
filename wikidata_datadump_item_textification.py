@@ -422,7 +422,7 @@ def convert_props_to_string(conn, pid, claimlist):
     return item_str
 
 
-def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
+def chunk_item_string(item_str, qid_, chunksize=128, len_header=2):
     # Chunking procedure
     chunks_dict = []
     chunks = []
@@ -463,7 +463,7 @@ def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
     return chunks_dict
 
 
-def entity_to_item_chunks(entity, conn=None, lang='en'):
+def entity_to_item_chunks(entity, conn=None, chunksize=128, lang='en'):
 
     if lang not in entity['descriptions'].keys():
         return []
@@ -496,7 +496,7 @@ def entity_to_item_chunks(entity, conn=None, lang='en'):
     for prop_claims_ in entity['claims'].items():  # tqdm(
         item_str = item_str + convert_props_to_string(conn, *prop_claims_)
 
-    return chunk_item_string(item_str, qid_, chunksize=100, len_header=2)
+    return chunk_item_string(item_str, qid_, chunksize=chunksize, len_header=2)
 
 
 def embed_items(item_dicts):
@@ -538,7 +538,7 @@ def write_dict_list_to_file(item_dicts, fout):
 
 def stream_etl_wikidata_datadump(
         in_filepath, fout, conn=None, embedder=None, batchsize=None,
-        lang='en', n_complete=None, qids_only=False):
+        chunksize=128, lang='en', n_complete=None, qids_only=False):
 
     if batchsize is not None:
         item_dicts = []  # batching statements before embedding
@@ -597,7 +597,12 @@ def stream_etl_wikidata_datadump(
                 continue
 
             # dict_vecdb.append(vecdb_line_)
-            item_dict = entity_to_item_chunks(entity, lang=lang, conn=conn)
+            item_dict = entity_to_item_chunks(
+                entity,
+                conn=conn,
+                chunksize=chunksize,
+                lang=lang
+            )
 
             if batchsize is not None:
                 item_dicts.extend(item_dict)
@@ -854,7 +859,7 @@ def sparql_list_all_pid_labels(
 
 def process_wikidata_dump(
         out_filepath, in_filepath, embedder=None, batchsize=None,
-        lang='en', n_complete=None, qids_only=False,
+        chunksize=128, lang='en', n_complete=None, qids_only=False,
         db_name='sqlitedbs/wikidata_qid_pid_labels.db'):
 
     warm_start = False
@@ -881,6 +886,7 @@ def process_wikidata_dump(
             conn=conn,
             embedder=embedder,
             batchsize=batchsize,
+            chunksize=chunksize,
             lang=lang,
             n_complete=n_complete,
             qids_only=qids_only
@@ -938,8 +944,12 @@ if __name__ == '__main__':
         help='Toggle to activate the embedder process.'
     )
     parser.add_argument(
-        '--batchsize', '-eb', type=int, default=120,
-        help='Number of Wikidata statements to embed in a single batch.'
+        '--batchsize', '-eb', type=int, default=128,
+        help='Number of Wikidata item chunks to embed in a single batch.'
+    )
+    parser.add_argument(
+        '--chunksize', '-cs', type=int, default=100,
+        help='Number of Wikidata statements per chunk.'
     )
 
     args = parser.parse_args()
@@ -949,6 +959,8 @@ if __name__ == '__main__':
     N_COMPLETE = int(os.environ.get('N_COMPLETE', args.n_complete))
     EMBED = os.environ.get('EMBED', args.embed)
     batchsize = os.environ.get('EMBED_BATCHSIZE', args.batchsize)
+    chunksize = os.environ.get('CHUNKSIZE', args.chunksize)
+
     if batchsize is not None:
         batchsize = int(batchsize)
 
@@ -1012,6 +1024,7 @@ if __name__ == '__main__':
 
     print(f'{out_filepath=}')
     print(f'{batchsize=}')
+    print(f'{chunksize=}')
 
     """
     pid_labels_filename = 'wikidata_vectordb_datadump_qids_12723_en.csv'
@@ -1034,6 +1047,7 @@ if __name__ == '__main__':
         db_name=db_name,
         embedder=embedder,  # Test post-process embedding
         batchsize=batchsize,
+        chunksize=chunksize,
         lang=lang,
         n_complete=n_complete,
         qids_only=qids_only
