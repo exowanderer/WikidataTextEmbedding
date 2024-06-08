@@ -331,10 +331,9 @@ class WikidataRESTAPI:
 
 
 def get_value_label(value, conn=None):
-
+    print(f'get_value_label({value=}, conn={conn=})')
     value_label = value
     if isinstance(value, dict):
-
         if 'id' in value:
             value_label = value['id']
         if 'amount' in value:
@@ -361,9 +360,9 @@ def get_value_label(value, conn=None):
 
     if conn is not None:
         is_qid = False
-        is_string = isinstance(value, str)
-        if is_string:
+        if is_string := isinstance(value, str):
             is_qid = value[0] == 'Q' and value[1:].isdigit()
+            print(f'{is_string=}, {is_qid=}, {value}')
 
         if is_qid:
             value_label = query_label(conn, value, field='qid')
@@ -395,6 +394,7 @@ def get_property_label(pid_, conn=None):
 def convert_props_to_string(conn, pid, claimlist):
 
     item_str = ''
+    pid_curr = None
     for claim_ in claimlist:
         # value = None  # Default to None
         # statement_ = None  # Default to None
@@ -416,21 +416,28 @@ def convert_props_to_string(conn, pid, claimlist):
 
             # statement_ = f'{item_desc} {prop_label} {value_label}'
             # statement_ = statement_.replace('"', "\'")
-
-            item_str = item_str + f'{prop_label}: {value_label}\n'
+            if pid_curr is not None and pid == pid_curr:
+                item_str = item_str + f',{value_label}'
+                pid_curr = pid
+            else:
+                item_str = item_str + f'\n{prop_label}: {value_label}'
 
     return item_str
 
 
-def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
-    # Chunking procedure
+def chunk_item_string(
+        item_str, qid, header='', n_statements=None,
+        n_sitelinks=None, n_descriptions=None, chunksize=100, len_header=2):
 
+    # Chunking procedure
     chunks_dict = []
     chunks = []
     header = ''
 
     k_chunk = 0
-    for k, line_ in enumerate(item_str.split('\n')):
+    split_lines = item_str.split('\n')
+    n_lines = len(split_lines)
+    for k, line_ in enumerate(split_lines):
         if k < len_header:
             header = header + f'{line_}\n'
         else:
@@ -441,9 +448,13 @@ def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
 
         chunk_str = header + '\n'.join(chunks)
         chunks_dict.append({
-            'qid': qid_,
+            'qid': qid,
             'chunk_id': k_chunk,
-            'qid_chunk': f'{qid_}_{k_chunk}',
+            'qid_chunk': f'{qid}_{k_chunk}',
+            'n_statements': n_statements,
+            'n_sitelinks': n_sitelinks,
+            'n_descriptions': n_descriptions,
+            'n_lines': n_lines,
             'item_str': chunk_str,
             'uuid': str(uuid.uuid4()),  # for db uniqueness
             'embedding': None
@@ -470,8 +481,8 @@ def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
 
 def entity_to_item_chunks(entity, conn=None, chunksize=100, lang='en'):
 
-    if lang not in entity['descriptions'].keys():
-        return []
+    n_sitelinks = len(entity['sitelinks'])
+    n_descriptions = len(entity['descriptions'])
 
     qid_ = entity['id']
 
@@ -501,7 +512,16 @@ def entity_to_item_chunks(entity, conn=None, chunksize=100, lang='en'):
     for prop_claims_ in entity['claims'].items():  # tqdm(
         item_str = item_str + convert_props_to_string(conn, *prop_claims_)
 
-    return chunk_item_string(item_str, qid_, chunksize=chunksize, len_header=2)
+    return chunk_item_string(
+        item_str=item_str,
+        qid=qid_,
+        header=header,
+        n_statements=n_statements,
+        n_sitelinks=n_sitelinks,
+        n_descriptions=n_descriptions,
+        chunksize=chunksize,
+        len_header=len_header
+    )
 
 
 def embed_items(item_dicts):
