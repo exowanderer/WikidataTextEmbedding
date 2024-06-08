@@ -471,7 +471,7 @@ def embed_statements(item_dicts, chunksize=1000, len_header=2):
     item_from_dict = []
     chunks = []
     header = ''
-
+    print(f'{chunksize=}')
     # TODO: Store chunk number in vDB metadata
     # Chunking procedure
     for k, item_ in enumerate(l_['item_str'] for l_ in item_dicts):
@@ -484,6 +484,7 @@ def embed_statements(item_dicts, chunksize=1000, len_header=2):
                 chunks.append(line_)
 
             if len(chunks) < chunksize:
+                print(f'{chunksize=}')
                 continue
 
             item_out = '\n'.join(chunks)
