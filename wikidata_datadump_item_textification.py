@@ -905,7 +905,11 @@ def process_wikidata_dump(
     if not warm_start:
         print('Creating Header')
 
-        full_header = 'qid,chunk_id,qid_chunk,item_str,uuid,embedding\n'
+        full_header = (
+            'qid,chunk_id,qid_chunk,'
+            'n_statements,n_sitelinks,n_descriptions,n_lines'
+            'item_str,uuid,embedding\n'
+        )
 
         with open(out_filepath, 'w', newline='') as fout:  #
             header = 'qid,label\n' if qids_only else full_header
