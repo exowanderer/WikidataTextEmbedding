@@ -435,16 +435,13 @@ def chunk_item_string(
     # Chunking procedure
     chunks_dict = []
     chunks = []
-    header = ''
-
     k_chunk = 0
+
     split_lines = item_str.split('\n')
     n_lines = len(split_lines)
-    for k, line_ in enumerate(split_lines):
-        if k < len_header:
-            header = header + f'{line_}\n'
-        else:
-            chunks.append(line_)
+
+    for line_ in split_lines:
+        chunks.append(line_)
 
         if len(chunks) < chunksize:
             continue
@@ -517,7 +514,7 @@ def entity_to_item_chunks(
     # TODO: Create aliases list
     # item_str = item_str + f'Aliases: ' + ', '.join(aliases) + '\n'
     claims = entity['claims'].items()
-    n_statements = sum([len(claim) for claim in claims])
+    n_statements = sum(len(claim) for claim in claims)
     # print(f'{len(claims)=}, {n_statements=}')
 
     for prop_claims_ in claims:  # tqdm(
