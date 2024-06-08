@@ -547,7 +547,7 @@ def stream_etl_wikidata_datadump(
 
     if batchsize is not None:
         item_dicts = []  # batching statements before embedding
-
+    print(f'\n0 {len(item_dicts)=}')
     n_items = n_items if 'n_items' in locals() else 0
     n_statements = n_statements if 'n_statements' in locals() else 0
 
@@ -568,12 +568,16 @@ def stream_etl_wikidata_datadump(
             #     continue
 
             n_items = n_items + 1
-
+            print(f'1 {n_items=}')
             if n_complete is not None and n_items > n_complete:
+                print(f'2a {len(item_dicts)=}')
                 if None not in [embedder, batchsize] and len(item_dicts):
+                    print(f'2b {len(item_dicts)=}')
                     # If batch embedding, then embed stack of dicts here
                     item_dicts = embed_statements(item_dicts)
+                    print(f'2c {len(item_dicts)=}')
                     write_dict_list_to_file(item_dicts, fout)
+                    print(f'2d {len(item_dicts)=}')
 
                 # Stop after `n_complete` items to avoid overloaded filesize
                 break
@@ -606,27 +610,36 @@ def stream_etl_wikidata_datadump(
             # dict_vecdb.append(vecdb_line_)
             item_dict = entity_to_item_chunks(entity, lang=lang, conn=conn)
 
+            print(f'3 {len(item_dicts)=}')
             if batchsize is not None:
-                print('Extending item_dicts')
-                print(f'{item_dict=}')
+                print(f'3a {len(item_dicts)=}')
                 item_dicts.extend(item_dict)
             else:
+                print(f'3b {len(item_dicts)=}')
                 item_dicts = item_dict
 
+            print(f'4 {len(item_dicts)=}')
             n_dicts = len(item_dicts)
+            print(f'4a {len(n_dicts)=}')
             if None not in [embedder, batchsize] and n_dicts >= batchsize:
+                print(f'4b {len(item_dicts)=}')
                 # If batch embedding, then embed stack of dicts here
                 item_dicts = embed_statements(item_dicts)
+                print(f'4c {len(item_dicts)=}')
 
+            print(f'5 {len(item_dicts)=}')
             if batchsize is not None and n_dicts < batchsize:
                 # If item_dicts len is less than batchsize
                 #   continue to next iteration without saving yet
                 continue
 
+            print(f'6 {len(item_dicts)=}')
             write_dict_list_to_file(item_dicts, fout)
-
+            print(f'7 {len(item_dicts)=}')
             n_statements = n_statements + n_dicts
+            print(f'8 {len(item_dicts)=}')
             item_dicts = []
+            print(f'9 {len(item_dicts)=}')
 
 
 def grep_string_in_file(search_string, file_path):
