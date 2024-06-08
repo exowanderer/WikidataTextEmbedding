@@ -561,7 +561,6 @@ def stream_etl_wikidata_datadump(
             # if k_iter < n_items:
             #     continue
 
-            n_items = n_items + 1
             if n_complete is not None and n_items > n_complete:
                 if None not in [embedder, batchsize] and len(item_dicts):
                     # If batch embedding, then embed stack of dicts here
@@ -571,6 +570,7 @@ def stream_etl_wikidata_datadump(
                 # Stop after `n_complete` items to avoid overloaded filesize
                 break
 
+            n_items = n_items + 1
             line = line.decode().strip()
 
             if line in {'[', ']'}:
