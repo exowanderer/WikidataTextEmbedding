@@ -158,18 +158,22 @@ if __name__ == '__main__':
     args = ArgumentParser('Astrapy Pipeline for Wikidata Embeddings')
     args.add_argument('--pipeline', '-p', type=str, default='item')
     args.add_argument('--chunksize', '-c', type=int, default=100)
+    args.add_argument('--collection', type=str, default='wikidata')
     args = args.parse_args()
 
     PIPELINE = os.environ.get('PIPELINE', args.pipeline)
     CHUNKSIZE = os.environ.get('CHUNKSIZE', args.chunksize)
     IS_DOCKER = is_docker()
 
+    CHUNKSIZE = args.pipeline if CHUNKSIZE is None else int(CHUNKSIZE)
+    COLLECTION = args.collection if COLLECTION is None else COLLECTION
+
     api_url = os.environ.get('ASTRACS_API_URL')
     app_token = os.environ.get('ASTRACS_API_KEY')
 
     client = astrapy.DataAPIClient(app_token)
     database = client.get_database_by_api_endpoint(api_url)
-    collection = database.get_collection("testwikidata")
+    collection = database.get_collection(COLLECTION)  # "testwikidata"
 
     # Path to the CSV file
     filename = 'wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
@@ -190,5 +194,5 @@ if __name__ == '__main__':
         df=None,
         csv_file=csv_file_path,
         ch_size=CHUNKSIZE,
-        pipeline=PIPELINE
-    )
+        pipeline=PIPELINE,
+        collection=)

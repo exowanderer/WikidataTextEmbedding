@@ -13,4 +13,5 @@ docker run -it \
         -e EMBED_BATCHSIZE=65536 \
         -e CHUNKSIZE=256 \
         -e PIPELINE=item \
+        -e COLLECTION='testwikidata' \
         wikidata_datadump_textification
