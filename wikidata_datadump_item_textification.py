@@ -410,7 +410,7 @@ def convert_props_to_string(conn, pid, claimlist):
             if isinstance(value, str):
                 value = value.replace('"', "\'")
 
-            prop_label = get_property_label(pid_, conn)
+            prop_label = get_property_label(pid, conn)
 
             # statement_ = f'{item_desc} {prop_label} {value_label}'
             # statement_ = statement_.replace('"', "\'")
