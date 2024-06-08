@@ -424,10 +424,12 @@ def convert_props_to_string(conn, pid, claimlist):
 
 def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
     # Chunking procedure
+
     chunks_dict = []
     chunks = []
     header = ''
-    # for item_ in [l_['item_str'] for l_ in item_dicts]:
+
+    k_chunk = 0
     for k, line_ in enumerate(item_str.split('\n')):
         if k < len_header:
             header = header + f'{line_}\n'
@@ -440,12 +442,14 @@ def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
         chunk_str = header + '\n'.join(chunks)
         chunks_dict.append({
             'qid': qid_,
-            'chunk_id': k,
-            'qid_chunk': f'{qid_}_{k}',
+            'chunk_id': k_chunk,
+            'qid_chunk': f'{qid_}_{k_chunk}',
             'item_str': chunk_str,
             'uuid': str(uuid.uuid4()),  # for db uniqueness
             'embedding': None
         })
+
+        k_chunk = k_chunk + 1
         chunks = []
 
     if len(chunks):
@@ -994,7 +998,7 @@ if __name__ == '__main__':
         )
 
     out_filedir = './csvfiles/' if USE_LOCAL else '/content/drive/'
-    out_filename = 'wikidata_vectordb_datadump_XYZ_en.csv'
+    out_filename = 'wikidata_vectordb_datadump_item_chunks_XYZ_en.csv'
 
     if IS_DOCKER:
         out_filedir = '/app/csvfiles/'
