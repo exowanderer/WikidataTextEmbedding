@@ -422,7 +422,46 @@ def convert_props_to_string(conn, pid, claimlist):
     return item_str
 
 
-def entity_to_statements(entity, conn=None, lang='en'):
+def chunk_item_string(item_str):
+    # Chunking procedure
+    chunks_dict = []
+    chunks = []
+    header = ''
+    for item_ in [l_['item_str'] for l_ in item_dicts]:
+        for k, line_ in enumerate(item_.split('\n')):
+            if k < len_header:
+                header = header + f'{line_}\n'
+            else:
+                chunks.append(line_)
+
+            if len(chunks) < chunksize:
+                continue
+
+            chunk_str = header + '\n'.join(chunks)
+            chunks_dict.append({
+                'uuid': str(uuid.uuid4()),  # for db uniqueness
+                'qid': qid_,
+                'chunk_id': k,
+                'qid_chunk': f'{qid_}_{k}',
+                'item_str': chunk_str,
+            })
+            chunks = []
+
+    if len(chunks):
+        chunk_str = header + '\n'.join(chunks)
+        chunks_dict.append({
+            'uuid': str(uuid.uuid4()),  # for db uniqueness
+            'qid': qid_,
+            'chunk_id': k,
+            'qid_chunk': f'{qid_}_{k}',
+            'item_str': chunk_str,
+        })
+        chunks = []
+
+    return chunks_dict
+
+
+def entity_to_item_chunks(entity, conn=None, lang='en'):
 
     if lang not in entity['descriptions'].keys():
         return []
@@ -444,8 +483,10 @@ def entity_to_statements(entity, conn=None, lang='en'):
     item_desc = item_desc.replace('"', "\'")
 
     # item_dicts = []
-    item_str = f'Label: {qid_label}\n'
-    item_str = item_str + f'Description: {item_desc}\n'
+    header = f'Label: {qid_label}\n'
+    header = header + f'Description: {item_desc}\n'
+
+    item_str = ''
 
     # TODO: Create aliases list
     # item_str = item_str + f'Aliases: ' + ', '.join(aliases) + '\n'
@@ -453,44 +494,12 @@ def entity_to_statements(entity, conn=None, lang='en'):
     for prop_claims_ in entity['claims'].items():  # tqdm(
         item_str = item_str + convert_props_to_string(conn, *prop_claims_)
 
-    return {
-        'uuid': str(uuid.uuid4()),  # for db uniqueness
-        'qid': qid_,
-        # 'pid': pid_,
-        # 'value': value_,
-        # 'item_label': item_desc,
-        # 'property_label': prop_label,
-        # 'value_content': value_label,
-        'item_str': item_str,
-        # 'embedding': None
-    }
+    return chunk_item_string(item_str)
 
 
 def embed_statements(item_dicts, chunksize=100, len_header=2):
 
     item_from_dict = []
-    chunks = []
-    header = ''
-    # TODO: Store chunk number in vDB metadata
-    # Chunking procedure
-    for item_ in [l_['item_str'] for l_ in item_dicts]:
-        for k, line_ in enumerate(item_.split('\n')):
-            if k < len_header:
-                header = header + f'{line_}\n'
-            else:
-                chunks.append(line_)
-
-            if len(chunks) < chunksize:
-                continue
-
-            item_out = '\n'.join(chunks)
-            item_from_dict.append(header + item_out)
-            chunks = []
-
-    if len(chunks):
-        item_out = '\n'.join(chunks)
-        item_from_dict.append(header + item_out)
-        chunks = []
 
     item_batch = []
     embeddings_for_dict = []
@@ -590,10 +599,10 @@ def stream_etl_wikidata_datadump(
                 continue
 
             # dict_vecdb.append(vecdb_line_)
-            item_dict = entity_to_statements(entity, lang=lang, conn=conn)
+            item_dict = entity_to_item_chunks(entity, lang=lang, conn=conn)
 
             if batchsize is not None:
-                item_dicts.append(item_dict)
+                item_dicts.extend(item_dict)
             else:
                 item_dicts = item_dict
 
