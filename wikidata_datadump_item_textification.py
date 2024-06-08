@@ -359,7 +359,7 @@ def get_value_label(value, conn=None):
             return
 
     if conn is not None:
-        print(f'{value=}')
+        print(f'Call value if QID: {value=}')
         is_qid = False
         if is_string := isinstance(value, str):
             is_qid = value[0] == 'Q' and value[1:].isdigit()
