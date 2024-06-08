@@ -532,9 +532,12 @@ def embed_statements(item_dicts):
 
 def write_dict_list_to_file(item_dicts, fout):
     # print(f'Saving {len(item_dicts)=} lines to file.')
+    print(f'\n{len(item_dicts)=}')
+    print(f'\n{fout=}')
     for dict_ in item_dicts:
         line_ = ','.join([f'"{item_}"' for item_ in dict_.values()])
         line_ = f'{line_}\n'
+        print(f'\n{line_=}')
         fout.write(line_)
 
 
@@ -615,22 +618,13 @@ def stream_etl_wikidata_datadump(
             n_dicts = len(item_dicts)
             if None not in [embedder, batchsize] and n_dicts >= batchsize:
                 # If batch embedding, then embed stack of dicts here
-                print(f'\n1: {n_dicts=}')
-                print(f'{batchsize=}')
-                print(f'{n_dicts < batchsize=}')
                 item_dicts = embed_statements(item_dicts)
 
             if batchsize is not None and n_dicts < batchsize:
-                print(f'\n2: {n_dicts=}')
-                print(f'{batchsize=}')
-                print(f'{n_dicts < batchsize=}')
                 # If item_dicts len is less than batchsize
                 #   continue to next iteration without saving yet
                 continue
 
-            print(f'\n3: {n_dicts=}')
-            print(f'{batchsize=}')
-            print(f'{n_dicts < batchsize=}')
             write_dict_list_to_file(item_dicts, fout)
 
             n_statements = n_statements + n_dicts
