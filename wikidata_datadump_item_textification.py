@@ -422,7 +422,7 @@ def convert_props_to_string(conn, pid, claimlist):
     return item_str
 
 
-def chunk_item_string(item_str, qid_, chunksize=128, len_header=2):
+def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
     # Chunking procedure
     chunks_dict = []
     chunks = []
@@ -463,7 +463,7 @@ def chunk_item_string(item_str, qid_, chunksize=128, len_header=2):
     return chunks_dict
 
 
-def entity_to_item_chunks(entity, conn=None, chunksize=128, lang='en'):
+def entity_to_item_chunks(entity, conn=None, chunksize=100, lang='en'):
 
     if lang not in entity['descriptions'].keys():
         return []
@@ -538,7 +538,7 @@ def write_dict_list_to_file(item_dicts, fout):
 
 def stream_etl_wikidata_datadump(
         in_filepath, fout, conn=None, embedder=None, batchsize=None,
-        chunksize=128, lang='en', n_complete=None, qids_only=False):
+        chunksize=100, lang='en', n_complete=None, qids_only=False):
 
     if batchsize is not None:
         item_dicts = []  # batching statements before embedding
@@ -859,7 +859,7 @@ def sparql_list_all_pid_labels(
 
 def process_wikidata_dump(
         out_filepath, in_filepath, embedder=None, batchsize=None,
-        chunksize=128, lang='en', n_complete=None, qids_only=False,
+        chunksize=100, lang='en', n_complete=None, qids_only=False,
         db_name='sqlitedbs/wikidata_qid_pid_labels.db'):
 
     warm_start = False
