@@ -561,15 +561,19 @@ def stream_etl_wikidata_datadump(
             pbar.set_description(pbar_desc)
             pbar.refresh()  # to show immediately the update
 
-            if k_iter < n_items:
-                continue
+            # if k_iter < n_items:
+            #     continue
 
             n_items = n_items + 1
 
             if n_complete is not None and n_items > n_complete:
                 if None not in [embedder, batchsize] and len(item_dicts):
+                    print(f'{embedder=}')
+                    print(f'{batchsize=}')
+                    print(f'{len(item_dicts)=}')
                     # If batch embedding, then embed stack of dicts here
                     item_dicts = embed_statements(item_dicts)
+                    print(f'{len(item_dicts)=}')
                     write_dict_list_to_file(item_dicts, fout)
 
                 # Stop after `n_complete` items to avoid overloaded filesize
@@ -611,9 +615,13 @@ def stream_etl_wikidata_datadump(
             n_dicts = len(item_dicts)
             if None not in [embedder, batchsize] and n_dicts >= batchsize:
                 # If batch embedding, then embed stack of dicts here
+                print(f'{n_dicts=}')
                 item_dicts = embed_statements(item_dicts)
 
             if batchsize is not None and n_dicts < batchsize:
+                print(f'{n_dicts=}')
+                print(f'{batchsize=}')
+                print(f'{n_dicts < batchsize=}')
                 # If item_dicts len is less than batchsize
                 #   continue to next iteration without saving yet
                 continue
