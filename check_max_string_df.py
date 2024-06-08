@@ -14,11 +14,27 @@ def return_max(chunk):
     return max_len, max_mem
 
 
-filename = 'csvfiles/wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
-with ThreadPool(cpu_count()) as pool:
-    # Wrap pool.imap with tqdm for progress tracking
-    pool_imap = pool.imap(
-        return_max,
-        pd.read_csv(filename, chunksize=1000)
-    )
-    max_max = list(tqdm(pool_imap))
+def max_max_pool(filename):
+    filename = 'csvfiles/wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
+    with Pool(cpu_count()) as pool:
+        # Wrap pool.imap with tqdm for progress tracking
+        pool_imap = pool.imap(
+            return_max,
+            pd.read_csv(filename, chunksize=1000)
+        )
+        max_max = list(tqdm(pool_imap))
+
+
+def max_max_load(filename, embed_chunksize=256):
+    filename = 'csvfiles/wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
+    df = pd.read_csv(filename)
+    max_string_len = 0
+    max_string_bytes = 0
+
+    for _, line_ in tqdm(df.iterrows()):
+        max_string_len = max(max_string_len, len(line_.item_str))
+        max_string_bytes = max(max_string_bytes, sys.getsizeof(line_.item_str))
+    print(max_string_len)
+    print(max_string_bytes)
+    print(max_string_bytes/max_string_len)
+    print(embed_chunksize / np.ceil(max_string_bytes))
