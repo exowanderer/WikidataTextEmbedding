@@ -422,7 +422,7 @@ def convert_props_to_string(conn, pid, claimlist):
     return item_str
 
 
-def chunk_item_string(item_str):
+def chunk_item_string(item_str, chunksize=100, len_header=2):
     # Chunking procedure
     chunks_dict = []
     chunks = []
@@ -497,7 +497,7 @@ def entity_to_item_chunks(entity, conn=None, lang='en'):
     return chunk_item_string(item_str)
 
 
-def embed_statements(item_dicts, chunksize=100, len_header=2):
+def embed_statements(item_dicts):
 
     item_from_dict = []
 
