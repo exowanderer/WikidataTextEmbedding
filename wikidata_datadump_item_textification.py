@@ -508,8 +508,11 @@ def entity_to_item_chunks(entity, conn=None, chunksize=100, lang='en'):
 
     # TODO: Create aliases list
     # item_str = item_str + f'Aliases: ' + ', '.join(aliases) + '\n'
+    claims = entity['claims'].items()
+    n_statements = sum([len(claim) for claim in claims])
+    print(f'{len(claims)=}, {n_statements=}')
 
-    for prop_claims_ in entity['claims'].items():  # tqdm(
+    for prop_claims_ in claims:  # tqdm(
         item_str = item_str + convert_props_to_string(conn, *prop_claims_)
 
     return chunk_item_string(
