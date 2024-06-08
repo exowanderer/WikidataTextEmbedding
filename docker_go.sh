@@ -10,6 +10,6 @@ docker run -it \
         -e WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN \
         -e N_COMPLETE=100 \
         -e EMBED=True \
-        -e EMBED_BATCHSIZE=128 \
+        -e EMBED_BATCHSIZE=2 \
         -e PIPELINE=item \
         wikidata_datadump_textification
