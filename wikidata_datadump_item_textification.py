@@ -404,18 +404,18 @@ def convert_props_to_string(conn, pid, claimlist):
             if value_label is None:
                 continue
 
-            if is_dict:
-                value = value_label
+            # if is_dict:
+            #     value = value_label
 
-            if isinstance(value, str):
-                value = value.replace('"', "\'")
+            # if isinstance(value, str):
+            #     value = value.replace('"', "\'")
 
             prop_label = get_property_label(pid, conn)
 
             # statement_ = f'{item_desc} {prop_label} {value_label}'
             # statement_ = statement_.replace('"', "\'")
 
-            item_str = item_str + f'{prop_label}: {item_desc}\n'
+            item_str = item_str + f'{prop_label}: {value_label}\n'
 
     return item_str
 
