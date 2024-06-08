@@ -8,6 +8,24 @@ import uuid
 from tqdm import tqdm
 
 
+def is_docker():
+    """Check if the script is running inside a Docker container."""
+    # Check for .dockerenv file
+    if os.path.exists('/.dockerenv'):
+        return True
+
+    # Check for Docker-specific entries in /proc/1/cgroup
+    try:
+        with open('/proc/1/cgroup', 'rt') as f:
+            for line in f:
+                if 'docker' in line:
+                    return True
+    except Exception:
+        pass
+
+    return False
+
+
 def vector_str_manipulation(vector_str):
     # Function to convert vector string to list of floats
     while '  ' in vector_str:
@@ -134,24 +152,43 @@ def upload_csv_to_astra(csv_file=None, df=None, ch_size=100, pipeline='item'):
             batch_insert_documents(collection, documents, label=k)
 
 
-# Initialize the DataStax Astra client
+if __name__ == '__main__':
+    # Initialize the DataStax Astra client
+    from argparse import ArgumentParser
+    args = ArgumentParser('Astrapy Pipeline for Wikidata Embeddings')
+    args.add_argument('--pipeline', '-p', type=str, default='item')
+    args.add_argument('--chunksize', '-c', type=int, default=100)
+    args = args.parse_args()
 
-api_url = os.environ.get('ASTRACS_API_URL')
-app_token = os.environ.get('ASTRACS_API_KEY')
+    PIPELINE = os.environ.get('PIPELINE', args.pipeline)
+    CHUNKSIZE = os.environ.get('CHUNKSIZE', args.chunksize)
+    IS_DOCKER = is_docker()
 
-client = astrapy.DataAPIClient(app_token)
-database = client.get_database_by_api_endpoint(api_url)
-collection = database.get_collection("testwikidata")
+    api_url = os.environ.get('ASTRACS_API_URL')
+    app_token = os.environ.get('ASTRACS_API_KEY')
 
-# Path to the CSV file
-csv_file_path = './csvfiles/wikidata_vectordb_datadump_10000_en.csv'
+    client = astrapy.DataAPIClient(app_token)
+    database = client.get_database_by_api_endpoint(api_url)
+    collection = database.get_collection("testwikidata")
 
-# print(f'Loading {csv_file_path}')
-# df = pd.read_csv(csv_file_path)
+    # Path to the CSV file
+    filename = 'wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
+    csv_file_path = f'./csvfiles/{filename}'
 
-# Clear deleteme file
-with open('deletme', 'w', newline='\n') as fdel:
-    fdel.write('')
+    if IS_DOCKER:
+        csv_file_path = csv_file_path.replace('./', '/app')
 
-# Upload the CSV data to Astra DB
-upload_csv_to_astra(df=None, csv_file=csv_file_path, ch_size=100)
+    # print(f'Loading {csv_file_path}')
+    # df = pd.read_csv(csv_file_path)
+
+    # Clear deleteme file
+    with open('deletme', 'w', newline='\n') as fdel:
+        fdel.write('')
+
+    # Upload the CSV data to Astra DB
+    upload_csv_to_astra(
+        df=None,
+        csv_file=csv_file_path,
+        ch_size=CHUNKSIZE,
+        PIPELINE=PIPELINE
+    )
