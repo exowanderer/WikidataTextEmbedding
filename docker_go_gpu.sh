@@ -8,10 +8,19 @@ docker run -it \
         -v $(pwd)/sqlitedbs:/app/sqlitedbs \
         -v $HOME/.cache/huggingface/hub:/root/.cache/huggingface/hub \
         -e WIKIMEDIA_TOKEN=$WIKIMEDIA_TOKEN \
-        -e N_COMPLETE=10000 \
+        -e N_COMPLETE=1000000 \
         -e EMBED=True \
-        -e EMBED_BATCHSIZE=128 \
-        -e CHUNKSIZE=100 \
+        -e EMBED_BATCHSIZE=65536 \
+        -e CHUNKSIZE=256 \
         -e PIPELINE=item \
         --gpus all \
         wikidata_datadump_textification
+
+# batchsize     time    chunksize
+# 128           1m45s   100
+# 1024          1m44s   100
+# 4096          1m44s   100
+# 32768         1m43s   100
+# 65536         1m44s   100
+# 65536         1m38s   128
+# 65536         1m37s   256
