@@ -453,11 +453,12 @@ def chunk_item_string(item_str, qid_, chunksize=100, len_header=2):
         chunks = []
 
     if len(chunks):
+        k_chunk = k_chunk + 1
         chunk_str = header + '\n'.join(chunks)
         chunks_dict.append({
             'qid': qid_,
-            'chunk_id': k,
-            'qid_chunk': f'{qid_}_{k}',
+            'chunk_id': k_chunk,
+            'qid_chunk': f'{qid_}_{k_chunk}',
             'item_str': chunk_str,
             'uuid': str(uuid.uuid4()),  # for db uniqueness
             'embedding': None
