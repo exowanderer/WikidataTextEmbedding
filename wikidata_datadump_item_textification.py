@@ -375,7 +375,8 @@ def get_value_label(value, conn=None):
                     value_label = value_label[:-1]
 
     # If value is not QID, then return value as value_label
-    return value_label.replace('"', "\'")
+    if value_label is not None:
+        return value_label.replace('"', "\'")
 
 
 def get_property_label(pid_, conn=None):
@@ -387,7 +388,8 @@ def get_property_label(pid_, conn=None):
         else:
             print(f'{pid_=}, {prop_label=}')
 
-    return prop_label.replace('"', "\'")
+    if prop_label is not None:
+        return prop_label.replace('"', "\'")
 
 
 def convert_props_to_string(conn, pid, claimlist):
