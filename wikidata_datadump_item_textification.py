@@ -479,7 +479,8 @@ def chunk_item_string(
     return chunks_dict
 
 
-def entity_to_item_chunks(entity, conn=None, chunksize=100, lang='en'):
+def entity_to_item_chunks(
+        entity, conn=None, chunksize=100, lang='en', len_header=2):
 
     n_sitelinks = len(entity['sitelinks'])
     n_descriptions = len(entity['descriptions'])
