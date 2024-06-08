@@ -164,8 +164,10 @@ if __name__ == '__main__':
 
     PIPELINE = os.environ.get('PIPELINE', args.pipeline)
     CHUNKSIZE = os.environ.get('CHUNKSIZE', args.chunksize)
+    COLLECTION = os.environ.get('COLLECTION', args.collection)
     IS_DOCKER = is_docker()
 
+    # TODO: Check if this is irrelevant
     CHUNKSIZE = args.pipeline if CHUNKSIZE is None else int(CHUNKSIZE)
     COLLECTION = args.collection if COLLECTION is None else COLLECTION
 
