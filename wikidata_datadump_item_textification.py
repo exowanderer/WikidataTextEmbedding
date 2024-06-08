@@ -485,11 +485,11 @@ def embed_statements(item_dicts, chunksize=1000, len_header=2):
                 print(f'{len(chunks)=}')
 
             if len(chunks) < chunksize:
-                print(f'{len(chunks)=}')
                 continue
 
             item_out = '\n'.join(chunks)
             item_from_dict.append(header + item_out)
+            print(f'{len(item_from_dict)=}')
             chunks = []
 
     if len(chunks):
