@@ -470,23 +470,25 @@ def embed_statements(item_dicts):
     # l_ is for "line"
     stmt_from_dict = [l_['item_str'] for l_ in item_dicts]
 
-    stmt_batch = []
+    item_batch = []
     embeddings_for_dict = []
-    for stmt_ in tqdm(stmt_from_dict):
-        stmt_batch.append(stmt_)
+    for item_ in tqdm(stmt_from_dict):
+        item_batch.append(item_)
 
-        if len(stmt_batch) >= batchsize:
+        if len(item_batch) >= batchsize:
+            print(f'{len(item_batch)=}')
+            print(item_batch)
             # embedding_ = embedd_jina_api(stmt_from_dict)
-            embedding_ = embedder.encode(stmt_batch)
+            embedding_ = embedder.encode(item_batch)
             embeddings_for_dict.extend(embedding_)
-            stmt_batch = []
+            item_batch = []
 
-    if len(stmt_batch):
-        # print(f'Wrapping up last {len(stmt_batch)} embeddings')
+    if len(item_batch):
+        # print(f'Wrapping up last {len(item_batch)} embeddings')
         # embedding_ = embedd_jina_api(stmt_from_dict)
-        embedding_ = embedder.encode(stmt_batch)
+        embedding_ = embedder.encode(item_batch)
         embeddings_for_dict.extend(embedding_)
-        stmt_batch = []
+        item_batch = []
 
     dict_list_out = []
     for line_, embed_ in zip(item_dicts, embeddings_for_dict):
