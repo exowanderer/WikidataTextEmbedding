@@ -331,7 +331,7 @@ class WikidataRESTAPI:
 
 
 def get_value_label(value, conn=None):
-    print(f'get_value_label({value=}, conn={conn=})')
+    # print(f'get_value_label({value=}, conn={conn=})')
     value_label = value
     if isinstance(value, dict):
         if 'id' in value:
@@ -357,15 +357,15 @@ def get_value_label(value, conn=None):
 
         if isinstance(value_label, dict):
             if 'entity-type' not in value.keys():
-                print(value)
+                print(f'{value=}')
             return
 
     if conn is not None:
-        print(f'Call value if QID: {value=}')
+        # print(f'Call value if QID: {value=}')
         is_qid = False
         if is_string := isinstance(value, str):
             is_qid = value[0] == 'Q' and value[1:].isdigit()
-            print(f'{is_string=}, {is_qid=}, {value}')
+            # print(f'{is_string=}, {is_qid=}, {value}')
 
         if is_qid:
             value_label = query_label(conn, value, field='qid')
@@ -518,7 +518,7 @@ def entity_to_item_chunks(
     # item_str = item_str + f'Aliases: ' + ', '.join(aliases) + '\n'
     claims = entity['claims'].items()
     n_statements = sum([len(claim) for claim in claims])
-    print(f'{len(claims)=}, {n_statements=}')
+    # print(f'{len(claims)=}, {n_statements=}')
 
     for prop_claims_ in claims:  # tqdm(
         item_str = item_str + convert_props_to_string(conn, *prop_claims_)
