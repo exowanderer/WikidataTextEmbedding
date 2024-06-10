@@ -99,26 +99,25 @@ def generate_document(row, pipeline='item'):
 
 
 def batch_insert_documents(collection, documents, label=''):
-    embeddings = [doc["embedding"] for doc in documents]
-    documents = [
-        {key: val}
-        for doc in documents
-        for key, val in doc.items()
-        if key != 'embedding'
-    ]
+    embeddings_ = [doc["embedding"] for doc in documents]
+
+    documents_ = []
+    for doc in documents:
+        doc_ = {key: val for key, val in doc.items() if key != 'embedding'}
+        documents_.append(doc_)
 
     try:
-        collection.insert_many(documents, vectors=embeddings)
+        collection.insert_many(documents_, vectors=embeddings_)
     except Exception as err:
         # TODO: introduce recursive looking
-        # batch_insert_documents(collection, documents, label=label)
+        # batch_insert_documents(collection, documents_, label=label)
         print(f'Error on Chunk {label}')
         print(f'Error: {err}')
         uuid_err_counter = 0
 
-        for embedding_, doc in tqdm(zip(embeddings, documents)):
+        for embedding_, doc_ in tqdm(zip(embeddings_, documents_)):
             try:
-                collection.insert_one(doc, vector=embedding_)
+                collection.insert_one(doc_, vector=embedding_)
             except Exception as err2:
                 uuid_err = "Failed to insert document with _id"
                 # uuid_err = "Document already exists with the given _id"
@@ -217,7 +216,7 @@ if __name__ == '__main__':
             indexing={"deny":  ["very_long_text"]}
         )
 
-    collection = database.get_collection(COLLECTION_NAME)  # "testwikidata"
+    collection = database.get_collection(COLLECTION_NAME)
 
     # Path to the CSV file
     filename = 'wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
