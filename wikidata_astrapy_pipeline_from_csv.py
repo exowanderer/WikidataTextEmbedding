@@ -102,8 +102,8 @@ def batch_insert_documents(collection, documents, label=''):
     embeddings = [doc["embedding"] for doc in documents]
     documents = [
         {key: val}
-        for key, val in doc.items()
         for doc in documents
+        for key, val in doc.items()
         if key != 'embedding'
     ]
 
