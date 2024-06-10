@@ -3,6 +3,7 @@ import astrapy
 import numpy as np
 import os
 import pandas as pd
+import sys
 import uuid
 
 from tqdm import tqdm
@@ -68,7 +69,7 @@ def generate_statement_document(row):
         "value_content": row["value_content"],
         "statement": row["statement"],
         # Convert string to vector
-        "embedding": convert_vector(row["embedding"])
+        "embedding": convert_vector(embedding)
     }
 
 
@@ -98,36 +99,34 @@ def generate_document(row, pipeline='item'):
 
 
 def batch_insert_documents(collection, documents, label=''):
+    embeddings = [doc["embedding"] for doc in documents]
+    documents = [
+        {key: val}
+        for key, val in doc.items()
+        for doc in documents
+        if key != 'embedding'
+    ]
+
     try:
-        collection.insert_many(
-            documents,
-            vectors=[doc["embedding"] for doc in documents]
-        )
+        collection.insert_many(documents, vectors=embeddings)
     except Exception as err:
         # TODO: introduce recursive looking
         # batch_insert_documents(collection, documents, label=label)
         print(f'Error on Chunk {label}')
         print(f'Error: {err}')
         uuid_err_counter = 0
-        with open('deletme', 'a', newline='\n') as fdel:
-            for doc in tqdm(documents):
-                try:
-                    # Assign new UUID
-                    # doc["_id"] = str(uuid.uuid4())
-                    collection.insert_one(
-                        doc,
-                        vector=doc["embedding"]
-                    )
-                except Exception as err2:
-                    uuid_err = "Failed to insert document with _id"
-                    # uuid_err = "Document already exists with the given _id"
 
-                    if uuid_err not in str(err2):
-                        print(f'Inner error: {err2}')
-                    else:
-                        uuid_err_counter = uuid_err_counter + 1
+        for embedding_, doc in tqdm(zip(embeddings, documents)):
+            try:
+                collection.insert_one(doc, vector=embedding_)
+            except Exception as err2:
+                uuid_err = "Failed to insert document with _id"
+                # uuid_err = "Document already exists with the given _id"
 
-                    fdel.write(f'{doc["embedding"]},{err},{err2}\n')
+                if uuid_err not in str(err2):
+                    print(f'Inner error: {err2}')
+                else:
+                    uuid_err_counter = uuid_err_counter + 1
 
             print(f'Number of UUID already exists errors: {uuid_err_counter}')
 
@@ -153,6 +152,20 @@ def upload_csv_to_astra(
             batch_insert_documents(collection, documents, label=k)
 
 
+def confirm_drop_collection(collection):
+    print(f'Collection exists: {collection}')
+    confirm = input("Confirm name of Collection to dropping: ")
+
+    while True:
+
+        if confirm.upper() == collection.upper():
+            print(f"\nDropping Collection {collection}\n")
+            return True
+
+        print('Input not confirm. Ending pipeline.')
+        sys.exit()
+
+
 if __name__ == '__main__':
     # Initialize the DataStax Astra client
     from argparse import ArgumentParser
@@ -160,23 +173,51 @@ if __name__ == '__main__':
     args.add_argument('--pipeline', '-p', type=str, default='item')
     args.add_argument('--chunksize', '-c', type=int, default=100)
     args.add_argument('--collection', type=str, default='wikidata')
+    args.add_argument('--embed_dim', '-ed', type=int, default=768)
+    args.add_argument('--restart_collection', '-rc', action='store_true')
     args = args.parse_args()
 
     PIPELINE = os.environ.get('PIPELINE', args.pipeline)
     CHUNKSIZE = os.environ.get('CHUNKSIZE', args.chunksize)
-    COLLECTION = os.environ.get('COLLECTION', args.collection)
+    COLLECTION_NAME = os.environ.get('COLLECTION_NAME', args.collection)
+    EMBED_DIM = os.environ.get('EMBED_DIM', args.embed_dim)
+    RESTART_COLLECTION = os.environ.get(
+        'RESTART_COLLECTION',
+        args.restart_collection
+    )
+
     IS_DOCKER = is_docker()
 
     # TODO: Check if this is irrelevant
     CHUNKSIZE = args.pipeline if CHUNKSIZE is None else int(CHUNKSIZE)
-    COLLECTION = args.collection if COLLECTION is None else COLLECTION
+
+    if COLLECTION_NAME is None:
+        COLLECTION_NAME = args.collection
 
     api_url = os.environ.get('ASTRACS_API_URL')
-    app_token = os.environ.get('ASTRACS_API_KEY')
+    api_token = os.environ.get('ASTRACS_API_KEY')
 
-    client = astrapy.DataAPIClient(app_token)
+    client = astrapy.DataAPIClient(api_token)
     database = client.get_database_by_api_endpoint(api_url)
-    collection = database.get_collection(COLLECTION)  # "testwikidata"
+
+    db_exists = COLLECTION_NAME in database.list_collection_names()
+
+    if db_exists and RESTART_COLLECTION:
+        is_confirmed = confirm_drop_collection(COLLECTION_NAME)
+        if is_confirmed:
+            print(f'Dropping collection {COLLECTION_NAME}')
+            result = db.drop_collection(name_or_collection=COLLECTOIN)
+            print(f'{result=}')
+
+    if not db_exists:
+        database.create_collection(
+            COLLECTION_NAME,
+            dimension=EMBED_DIM,
+            metric=astrapy.constants.VectorMetric.COSINE,
+            indexing={"deny":  ["very_long_text"]}
+        )
+
+    collection = database.get_collection(COLLECTION_NAME)  # "testwikidata"
 
     # Path to the CSV file
     filename = 'wikidata_vectordb_datadump_item_chunks_1000000_en.csv'
@@ -187,10 +228,6 @@ if __name__ == '__main__':
 
     # print(f'Loading {csv_file_path}')
     # df = pd.read_csv(csv_file_path)
-
-    # Clear deleteme file
-    with open('deletme', 'w', newline='\n') as fdel:
-        fdel.write('')
 
     # Upload the CSV data to Astra DB
     upload_csv_to_astra(
