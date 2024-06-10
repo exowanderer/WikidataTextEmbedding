@@ -205,7 +205,7 @@ if __name__ == '__main__':
         is_confirmed = confirm_drop_collection(COLLECTION_NAME)
         if is_confirmed:
             print(f'Dropping collection {COLLECTION_NAME}')
-            result = db.drop_collection(name_or_collection=COLLECTOIN)
+            result = db.drop_collection(name_or_collection=COLLECTION_NAME)
             print(f'{result=}')
 
     if not db_exists:
