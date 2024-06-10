@@ -205,16 +205,21 @@ if __name__ == '__main__':
         is_confirmed = confirm_drop_collection(COLLECTION_NAME)
         if is_confirmed:
             print(f'Dropping collection {COLLECTION_NAME}')
-            result = db.drop_collection(name_or_collection=COLLECTION_NAME)
+            result = database.drop_collection(
+                name_or_collection=COLLECTION_NAME
+            )
             print(f'{result=}')
 
+        db_exists = COLLECTION_NAME in database.list_collection_names()
+
     if not db_exists:
-        database.create_collection(
+        result = database.create_collection(
             COLLECTION_NAME,
             dimension=EMBED_DIM,
             metric=astrapy.constants.VectorMetric.COSINE,
             indexing={"deny":  ["very_long_text"]}
         )
+        print(f'{result=}')
 
     collection = database.get_collection(COLLECTION_NAME)
 
