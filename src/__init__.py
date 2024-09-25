@@ -1,0 +1,1 @@
+from .wikidata_dumpreader import WikidataDumpReader
