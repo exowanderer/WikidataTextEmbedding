@@ -6,9 +6,11 @@ import asyncio
 import aiofiles
 import time
 import psutil
+from tqdm import tqdm
+from multiprocessing import Pool, Queue, Event, Value
 
 class WikidataDumpReader:
-    def __init__(self, file_path, num_processes=4, batch_size=1000):
+    def __init__(self, file_path, num_processes=4, batch_size=1000, queue_size=10000, skiplines=0):
         """
         Initializes the reader with the file path, number of processes for multiprocessing,
         and batch size for reading lines.
@@ -17,14 +19,11 @@ class WikidataDumpReader:
         self.extension = file_path.split(".")[-1]
         self.num_processes = num_processes
         self.batch_size = batch_size
-        self.queue = asyncio.Queue(maxsize=batch_size)
+        self.skiplines = skiplines
+        self.queue = Queue(maxsize=queue_size)
 
-        self.finished_lock = asyncio.Lock()
-        self.finished = False
-
-        self.iteration_lock = asyncio.Lock()
-        self.iteration_event = asyncio.Event()
-        self.iterations = 0
+        self.finished = Value('i', False)
+        self.iterations = Value('i', 0)
 
     def lines_to_entities(self, lines):
         """
@@ -56,62 +55,47 @@ class WikidataDumpReader:
         :param max_iterations: Max number of iterations (for testing purposes).
         :param verbose: If true, prints processing stats.
         """
-        
-        producer = asyncio.create_task(self._producer(max_iterations))
+
+        producer = asyncio.to_thread(self._producer, max_iterations)
         consumers = [
-            asyncio.create_task(self._consumer(handler_func, verbose))
-            for _ in range(self.num_processes)
+            asyncio.to_thread(self._consumer, handler_func) for _ in range(self.num_processes)
         ]
+
         tasks = [producer, *consumers]
         if verbose:
-            reporter = asyncio.create_task(self._reporter())
+            reporter = asyncio.to_thread(self._reporter)
             tasks.append(reporter)
 
         await asyncio.gather(*tasks)
 
-    async def _reporter(self):
+    def _reporter(self):
         """
         Reads lines from the file in batches and pushes individual entities into the queue.
         """
         start = time.time()
-        line_per_s_values = []
-        mem_usage_values = []
-        total_iterations = 0
 
-        while (not self.finished) or (not self.queue.empty()):
-            await self.iteration_event.wait()
+        while (not self.finished.value) or (not self.queue.empty()):
+            time.sleep(3)
             
-            total_iterations += self.iterations
             time_per_iteration_s = time.time() - start
-            lines_per_s = self.iterations / time_per_iteration_s
-            line_per_s_values.append(lines_per_s)
-            line_per_s_values = line_per_s_values[-100:]
-            lines_per_s_avg = sum(line_per_s_values) / len(line_per_s_values)
-            start = time.time()
+            lines_per_s = (self.iterations.value * self.batch_size) / time_per_iteration_s
 
             process = psutil.Process()
             memory_info = process.memory_info()
             memory_usage_mb = memory_info.rss / 1024 ** 2
-            mem_usage_values.append(memory_usage_mb)
-            mem_usage_values = mem_usage_values[-100:]
-            mem_usage_avg = sum(mem_usage_values) / len(mem_usage_values)
-
-            async with self.iteration_lock:
-                self.iterations = 0
-                self.iteration_event.clear()
 
             print(
-                f"{total_iterations} Lines Processed \t Line Process Avg: {lines_per_s_avg:.0f} items/sec \t Memory Usage Avg: {mem_usage_avg:.2f} MB",
+                f"{(self.iterations.value * self.batch_size)} Lines Processed \t Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB",
                 file=sys.stderr,
             )
             
 
-    async def _producer(self, max_iterations):
+    def _producer(self, max_iterations):
         """
         Reads lines from the file in batches and pushes individual entities into the queue.
         """
-        async with self.finished_lock:
-            self.finished = False
+        with self.finished.get_lock():
+            self.finished.value = False
 
         iters = 0
         if self.extension == 'json':
@@ -122,39 +106,36 @@ class WikidataDumpReader:
             raise ValueError("File extension is not supported")
 
         for lines_batch in read_lines:
-            entities_batch = self.lines_to_entities(lines_batch)
-
-            for entity in entities_batch:
-                if entity:
-                    await self.queue.put(entity)
+            self.queue.put(lines_batch)
 
             iters += 1
             if max_iterations and (iters >= max_iterations):
                 break
             
-        async with self.finished_lock:
-            self.finished = True
-            self.iteration_event.set()
+        with self.finished.get_lock():
+            self.finished.value = True
 
-    async def _consumer(self, handler_func, verbose):
+    def _consumer(self, handler_func):
         """
         Consumes JSON entities from the queue and processes them using the handler function.
         """
-        while (not self.finished) or (not self.queue.empty()):
-            entity = None
+        while (not self.finished.value) or (not self.queue.empty()):
+            lines_batch = None
             try:
-                entity = await asyncio.wait_for(self.queue.get(), timeout=1)
-            except asyncio.TimeoutError:
-                if self.finished:
+                lines_batch = self.queue.get(timeout=1)
+            except:
+                if self.finished.value:
                     break
 
-            if entity:
-                await handler_func(entity)
+            if lines_batch:
+                entities_batch = self.lines_to_entities(lines_batch)
 
-                async with self.iteration_lock:
-                    if self.iterations >= self.batch_size:
-                        self.iteration_event.set()
-                    self.iterations += 1
+                for entity in entities_batch:
+                    if entity:
+                        handler_func(entity)
+
+                with self.iterations.get_lock():
+                    self.iterations.value += 1
 
     def _read_jsonfile(self):
         """
@@ -163,6 +144,8 @@ class WikidataDumpReader:
         file = None
         try:
             file = open(self.file_path, mode="r")
+            for _ in tqdm(range(self.skiplines)):
+                file.readline()
 
             while True:
                 lines_batch = ''
@@ -193,6 +176,9 @@ class WikidataDumpReader:
                 file = bz2.open(self.file_path, "rt")
             else:
                 raise ValueError("Zip file extension is not supported")
+
+            for _ in tqdm(range(self.skiplines)):
+                file.readline()
 
             while True:
                 lines_batch = ''
