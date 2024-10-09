@@ -10,3 +10,4 @@ orjson
 sqlalchemy
 bz2
 gzip
+einops
