@@ -5,3 +5,8 @@ sentence-transformers
 SPARQLWrapper
 tqdm
 aiofiles
+convertdate
+orjson
+sqlalchemy
+bz2
+gzip

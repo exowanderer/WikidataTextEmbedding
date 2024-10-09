@@ -78,14 +78,14 @@ class WikidataDumpReader:
             time.sleep(3)
             
             time_per_iteration_s = time.time() - start
-            lines_per_s = (self.iterations.value * self.batch_size) / time_per_iteration_s
+            lines_per_s = self.iterations.value / time_per_iteration_s
 
             process = psutil.Process()
             memory_info = process.memory_info()
             memory_usage_mb = memory_info.rss / 1024 ** 2
 
             print(
-                f"{(self.iterations.value * self.batch_size)} Lines Processed \t Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB",
+                f"{self.iterations.value} Lines Processed \t Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB",
                 file=sys.stderr,
             )
             
@@ -135,7 +135,7 @@ class WikidataDumpReader:
                         handler_func(entity)
 
                 with self.iterations.get_lock():
-                    self.iterations.value += 1
+                    self.iterations.value += len(entities_batch)
 
     def _read_jsonfile(self):
         """
