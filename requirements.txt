@@ -11,3 +11,4 @@ sqlalchemy
 bz2
 gzip
 einops
+astrapy

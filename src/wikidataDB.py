@@ -24,7 +24,7 @@ class JSONType(TypeDecorator):
         if value is not None:
             return orjson.loads(value)
         return None
-    
+
 class WikidataEntity(Base):
     __tablename__ = 'wikidata'
 
@@ -75,7 +75,7 @@ class WikidataEntity(Base):
     def get_entity(id):
         with Session() as session:
             return session.query(WikidataEntity).filter_by(id=id).first()
-    
+
 class WikidataID(Base):
     __tablename__ = 'wikidataID'
 
@@ -89,10 +89,12 @@ class WikidataID(Base):
                 session.execute(
                     text(
                         """
-                        INSERT INTO wikidataID (id, in_wikipedia, is_property) 
+                        INSERT INTO wikidataID (id, in_wikipedia, is_property)
                         VALUES (:id, :in_wikipedia, :is_property)
-                        ON CONFLICT(id) DO UPDATE 
-                        SET in_wikipedia=excluded.in_wikipedia, is_property=excluded.is_property
+                        ON CONFLICT(id) DO UPDATE
+                        SET
+                            in_wikipedia = CASE WHEN excluded.in_wikipedia = TRUE THEN excluded.in_wikipedia ELSE wikidataID.in_wikipedia END,
+                            is_property = CASE WHEN excluded.is_property = TRUE THEN excluded.is_property ELSE wikidataID.is_property END
                         """
                     ),
                     data
@@ -119,5 +121,5 @@ class WikidataID(Base):
     def get_id(id):
         with Session() as session:
             return session.query(WikidataID).filter_by(id=id).first()
-        
+
 Base.metadata.create_all(engine)
