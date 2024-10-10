@@ -64,6 +64,8 @@ def count_types(item):
                     if worked:
                         bulk_ids = []
 
+                if len(bulk_ids) > 0:
+                    worked = WikidataID.add_bulk_ids(bulk_ids)
 
 def remove_keys(data, keys_to_remove=['hash', 'property', 'numeric-id', 'qualifiers-order']):
     if isinstance(data, dict):
@@ -205,6 +207,7 @@ def get_missing_entities(session, ids):
 
 
 if __name__ == '__main__':
+    """
     FILEPATH = '../data/Wikidata/latest-all.json.bz2'
     BATCH_SIZE = 1000
     NUM_PROCESSES = 4  # or 6?
@@ -233,7 +236,7 @@ if __name__ == '__main__':
         await wikidata.run(save_entites_to_sqlite, max_iterations=None, verbose=False)
 
     await run_processor()
-
+    """
     progressbar.close()
     if len(data_batch) > 0:
         WikidataEntity.add_bulk_entities(data_batch)
