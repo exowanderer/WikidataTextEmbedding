@@ -42,18 +42,6 @@ def vector_str_manipulation(vector_str):
 
 
 def convert_vector(vector_str):
-    """Convert string representation of a vector to a list of floats."""
-    vector_str = vector_str_manipulation(vector_str)
-    if isinstance(vector_str, str):
-        return [float(x) for x in ast.literal_eval(vector_str)]
-    elif isinstance(vector_str, (float, np.ndarray)):
-        return list(vector_str)
-    else:
-        raise TypeError(f'Unsupported type: {type(vector_str)}')
-
-
-"""
-def convert_vector(vector_str):
     # print(f'{vector_str=}')
     vector_str = vector_str_manipulation(vector_str)
 
@@ -66,7 +54,6 @@ def convert_vector(vector_str):
     else:
         print(f'{type(vector_str)=}')
         return vector_str
-"""
 
 # Function to generate documents from CSV rows
 
