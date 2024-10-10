@@ -69,6 +69,7 @@ def count_types(item):
                 if len(bulk_ids) > 0:
                     worked = WikidataID.add_bulk_ids(bulk_ids)
 
+
 def remove_keys(data, keys_to_remove=['hash', 'property', 'numeric-id', 'qualifiers-order']):
     if isinstance(data, dict):
         return {
@@ -129,6 +130,10 @@ def save_entites_to_sqlite(item):
                     worked = WikidataEntity.add_bulk_entities(data_batch)
                     if worked:
                         data_batch = []
+                #     break
+
+                # if len(data_batch) >= 0:
+                #     worked = WikidataEntity.add_bulk_entities(data_batch)
 
 
 def in_mul_and_not_en(item):
