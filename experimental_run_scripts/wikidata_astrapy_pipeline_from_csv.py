@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 
 def is_docker():
-    '''Check if the script is running inside a Docker container.'''
+    """Check if the script is running inside a Docker container."""
     # Check for .dockerenv file
     if os.path.exists('/.dockerenv'):
         return True
