@@ -29,13 +29,6 @@ def is_docker():
 
 
 def vector_str_manipulation(vector_str):
-    """Convert vector string to a list of floats."""
-    return re.sub(r'\s+', ',', vector_str).replace('[,', '[').replace(',]', ']')
-    # return vector_str.replace('[,', '[').replace(',]', ']')
-
-
-"""
-def vector_str_manipulation(vector_str):
     # Function to convert vector string to list of floats
     while '  ' in vector_str:
         vector_str = vector_str.replace('  ', ' ')
@@ -46,7 +39,6 @@ def vector_str_manipulation(vector_str):
         vector_str = vector_str.replace(',,', ',')
 
     return vector_str.replace('[,', '[').replace(',]', ']')
-"""
 
 
 def convert_vector(vector_str):
