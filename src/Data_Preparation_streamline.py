@@ -231,12 +231,13 @@ if __name__ == '__main__':
     sqlitDBlock = Lock()
     language = 'en'
 
-    wikidata = WikidataDumpReader(FILEPATH, num_processes=NUM_PROCESSES, batch_size=BATCH_SIZE, skiplines=0)
 
-    async def run_processor():
+    async def run_processor(wikidata):
         await wikidata.run(save_entites_to_sqlite, max_iterations=None, verbose=False)
 
-    await run_processor()
+    wikidata = WikidataDumpReader(FILEPATH, num_processes=NUM_PROCESSES, batch_size=BATCH_SIZE, skiplines=0)
+    run_processor(wikidata)
+
     """
     progressbar.close()
     if len(data_batch) > 0:
