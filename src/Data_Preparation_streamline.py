@@ -208,7 +208,7 @@ def get_missing_entities(session, ids):
 
 
 if __name__ == '__main__':
-    """
+    
     FILEPATH = '../data/Wikidata/latest-all.json.bz2'
     BATCH_SIZE = 1000
     NUM_PROCESSES = 4  # or 6?
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     async def run_processor(wikidata):
         await wikidata.run(count_types, max_iterations=None, verbose=True)
 
-    await run_processor(wikidata)
+    run_processor(wikidata)
     """
     # Adding entities (label, description, claims, and aliases) of IDs found in WikidataID to WikidataEntity
     skiplines = 0
@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
     wikidata = WikidataDumpReader(FILEPATH, num_processes=NUM_PROCESSES, batch_size=BATCH_SIZE, skiplines=0)
     run_processor(wikidata)
-
+    """
     """
     progressbar.close()
     if len(data_batch) > 0:
