@@ -2,6 +2,7 @@ import sys
 # sys.path.append('../src')
 sys.path.append('.')
 
+import asyncio
 import json
 import psutil
 
@@ -221,7 +222,7 @@ if __name__ == '__main__':
     async def run_processor(wikidata):
         await wikidata.run(count_types, max_iterations=None, verbose=True)
 
-    run_processor(wikidata)
+    asyncio.run(run_processor(wikidata))
     """
     # Adding entities (label, description, claims, and aliases) of IDs found in WikidataID to WikidataEntity
     skiplines = 0
