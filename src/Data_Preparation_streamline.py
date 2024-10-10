@@ -18,7 +18,7 @@ from tqdm import tqdm
 def in_en_wiki(item):
     return ('sitelinks' in item) and (f'{language}wiki' in item['sitelinks']) and ((language in item['labels']) or ('mul' in item['labels'])) and ((language in item['descriptions']) or ('mul' in item['descriptions']))
 
-bulk_ids = []
+# bulk_ids = []
 def count_types(item):
     global bulk_ids
 
@@ -149,7 +149,7 @@ def remove_keys(data, keys_to_remove=['hash', 'property', 'numeric-id', 'qualifi
         return [remove_keys(item, keys_to_remove) for item in data]
     else:
         return data
-    
+
 def get_claims(item):
     claims = {}
     if 'claims' in item:
@@ -174,10 +174,10 @@ def get_aliases(item):
         aliases = aliases | set([x['value'] for x in item['aliases']['mul']])
     return list(aliases)
 
-data_batch = []
-progressbar = tqdm(total=112473858)
-sqlitDBlock = Lock()
-language = 'en'
+# data_batch = []
+# progressbar = tqdm(total=112473858)
+# sqlitDBlock = Lock()
+# language = 'en'
 def save_entites_to_sqlite(item):
     global data_batch
     global missing_ids
@@ -214,15 +214,19 @@ def get_missing_entities(session, ids):
 
 
 if __name__ == '__main__':
-    
+
     FILEPATH = '../data/Wikidata/latest-all.json.bz2'
     BATCH_SIZE = 1000
     NUM_PROCESSES = 4  # or 6?
     language = 'en'
     sqlitDBlock = Lock()
 
+    # data_batch = []
+    # progressbar = tqdm(total=112473858)
+    # sqlitDBlock = Lock()
+    # language = 'en'
     wikidata = WikidataDumpReader(FILEPATH, num_processes=NUM_PROCESSES, batch_size=BATCH_SIZE, skiplines=0)
-
+    bulk_ids = []
     # Reading the Wikidata dump ZIP file and saving the IDs of entities and properties to a JSON file (Only the ones connected to the English Wikipedia)
     async def run_processor(wikidata):
         await wikidata.run(count_types, max_iterations=None, verbose=True)
