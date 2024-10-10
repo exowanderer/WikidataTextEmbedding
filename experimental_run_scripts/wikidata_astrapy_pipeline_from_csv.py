@@ -11,16 +11,6 @@ from tqdm import tqdm
 
 
 def is_docker():
-    """Check if the script is running inside a Docker container."""
-    with open('/proc/1/cgroup', 'rt') as fproc:
-        return (
-            os.path.exists('/.dockerenv')
-            or any('docker' in line for line in fproc)
-        )
-
-
-"""
-def is_docker():
     '''Check if the script is running inside a Docker container.'''
     # Check for .dockerenv file
     if os.path.exists('/.dockerenv'):
@@ -36,7 +26,6 @@ def is_docker():
         pass
 
     return False
-"""
 
 
 def vector_str_manipulation(vector_str):
