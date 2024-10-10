@@ -55,14 +55,14 @@ def is_docker():
 
 
 def embedd_jina_api(statement):
+    jina_api_key = os.getenv('JINA_API_KEY')
 
     url = 'https://api.jina.ai/v1/embeddings'
 
     headers = {
         'Content-Type': 'application/json',
         'Authorization': (
-            'Bearer '
-            'jina_a5115787a3624a52a1841a5c90bda2d494No-PfR74durwpOSX0waSUjI02m'
+            f'Bearer {jina_api_key}'
         )
     }
 
@@ -78,14 +78,14 @@ def embedd_jina_api(statement):
 
 
 def push_datastax_api(statements):
+    jina_api_key = os.getenv('JINA_API_KEY')
 
     url = 'https://api.jina.ai/v1/embeddings'
 
     headers = {
         'Content-Type': 'application/json',
         'Authorization': (
-            'Bearer '
-            'jina_a5115787a3624a52a1841a5c90bda2d494No-PfR74durwpOSX0waSUjI02m'
+            f'Bearer {jina_api_key}'
         )
     }
 
