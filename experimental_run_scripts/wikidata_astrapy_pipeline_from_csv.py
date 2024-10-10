@@ -1,13 +1,13 @@
 import ast
+import astrapy
 import numpy as np
 import os
 import pandas as pd
 import re
 import sys
-from tqdm import tqdm
 import uuid
 
-import astrapy
+from tqdm import tqdm
 
 
 def is_docker():
