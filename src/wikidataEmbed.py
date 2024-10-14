@@ -1,7 +1,9 @@
 from datetime import datetime, date
 import re
+from transformers import AutoModel
+from typing import List
 from wikidataDB import WikidataEntity
-    
+
 class WikidataEmbed:
     def __init__():
         pass
@@ -10,11 +12,11 @@ class WikidataEmbed:
         """
         Converts a Wikidata entity to a readable text string, including its label, description,
         and aliases, as well as a list of its properties.
-        
+
         Parameters:
         - entity: A WikidataEntity object that contains information about the entity.
         - with_desc: Whether to include the entity descriptions in the output text.
-        
+
         Returns:
         - A string representation of the entity, its description, and its properties.
         """
@@ -26,14 +28,14 @@ class WikidataEmbed:
 
     def mainsnak_to_value(mainsnak, with_desc=False):
         """
-        Converts a Wikidata mainsnak to a readable value. A mainsnak is a part of a claim and 
+        Converts a Wikidata mainsnak to a readable value. A mainsnak is a part of a claim and
         stores the actual value of the statement.
         Datatypes that are kept include: wikibase-item, wikibase-property, monolingualtext, string, time, and quantity
-        
+
         Parameters:
         - mainsnak: The snak object that contains the value and datatype information.
         - with_desc: Whether to include the description of the value in the output text.
-        
+
         Returns:
         - A string representation of the value or None if the value cannot be parsed.
         """
@@ -43,7 +45,7 @@ class WikidataEmbed:
                 entity = WikidataEntity.get_entity(entity_id)
                 if entity is None:
                     return None
-                
+
                 text = entity.label
                 if with_desc:
                     text += f", {entity.description}"
@@ -51,23 +53,23 @@ class WikidataEmbed:
 
             elif mainsnak.get('datatype', '') == 'monolingualtext':
                 return mainsnak['datavalue']['value']['text']
-            
+
             elif mainsnak.get('datatype', '') == 'string':
                 return mainsnak['datavalue']['value']
-            
+
             elif mainsnak.get('datatype', '') == 'time':
                 return WikidataEmbed.time_to_text(mainsnak['datavalue']['value'])
-            
+
             elif mainsnak.get('datatype', '') == 'quantity':
                 text = mainsnak['datavalue']['value']['amount']
                 unit = '1'
                 if unit != '1':
-                    text += f" {unit}" 
+                    text += f" {unit}"
                 return text
 
-        elif mainsnak.get('snaktype', '') == 'novalue':    
+        elif mainsnak.get('snaktype', '') == 'novalue':
             return 'no value'
-        
+
         return None
 
     def qualifiers_to_text(qualifiers):
@@ -77,7 +79,7 @@ class WikidataEmbed:
 
         Parameters:
         - qualifiers: A dictionary of qualifiers with property IDs as keys and their values as lists.
-        
+
         Returns:
         - A string representation of the qualifiers.
         """
@@ -102,11 +104,11 @@ class WikidataEmbed:
     def properties_to_text(properties, with_desc=False):
         """
         Converts a list of properties (claims) to a readable text string.
-        
+
         Parameters:
         - properties: A dictionary of properties (claims) with property IDs as keys.
         - with_desc: Whether to include descriptions of the properties in the output.
-        
+
         Returns:
         - A string representation of the properties and their values.
         """
@@ -128,20 +130,20 @@ class WikidataEmbed:
                     text += f"\n- {property.label}"
                     if with_desc:
                         text += f", {property.description}"
-                    
+
                     if len(p_data) > 1:
                         text += f": - {'\n \t- '.join(p_data)}"
                     else:
                         text += f": {p_data[0]}"
         return text
-    
+
     def quantity_to_text(quantity_data):
         """
         Converts quantity data into a readable text string.
-        
+
         Parameters:
         - quantity_data: A dictionary that includes a quantity value and an optional unit.
-        
+
         Returns:
         - A string representation of the quantity and its unit (if available).
         """
@@ -155,16 +157,16 @@ class WikidataEmbed:
             entity = WikidataEntity.get_entity(unit_qid)
             if entity:
                 unit = entity.label
-        
+
         return quantity + (f" {unit}" if unit else "")
 
     def time_to_text(time_data):
         """
         Converts time data into a readable text string.
-        
+
         Parameters:
         - time_data: A dictionary that includes the time and other related information.
-        
+
         Returns:
         - A string representation of the time.
         """
@@ -231,3 +233,16 @@ class WikidataEmbed:
             return f"{abs(year) // 1_000_000_000} billion years {'CE' if year > 0 else 'BCE'}"
         else:
             raise ValueError(f"Unknown precision value {precision}")
+
+class JinaAIEmbeddings:
+    def __init__(self, passage_task="retrieval.passage", query_task="retrieval.query", embedding_dim=1024):
+        self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True).to('cuda')
+        self.passage_task = passage_task
+        self.query_task = query_task
+        self.embedding_dim = embedding_dim
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self.model.encode(texts, task=self.passage_task, truncate_dim=self.embedding_dim)
+
+    def embed_query(self, query: str) -> List[float]:
+        return self.model.encode([query], task=self.query_task, truncate_dim=self.embedding_dim)[0]
