@@ -1,5 +1,7 @@
 from datetime import datetime, date
 import re
+from transformers import AutoModel
+from typing import List
 from wikidataDB import WikidataEntity
 
 class WikidataEmbed:
@@ -231,3 +233,16 @@ class WikidataEmbed:
             return f"{abs(year) // 1_000_000_000} billion years {'CE' if year > 0 else 'BCE'}"
         else:
             raise ValueError(f"Unknown precision value {precision}")
+
+class JinaAIEmbeddings:
+    def __init__(self, passage_task="retrieval.passage", query_task="retrieval.query", embedding_dim=1024):
+        self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True).to('cuda')
+        self.passage_task = passage_task
+        self.query_task = query_task
+        self.embedding_dim = embedding_dim
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self.model.encode(texts, task=self.passage_task, truncate_dim=self.embedding_dim)
+
+    def embed_query(self, query: str) -> List[float]:
+        return self.model.encode([query], task=self.query_task, truncate_dim=self.embedding_dim)[0]
