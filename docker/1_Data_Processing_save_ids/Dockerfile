@@ -10,13 +10,13 @@ LABEL maintainer="philippe.saade@wikimedia.de"
 WORKDIR /app
 
 # Copy the requirements file into the container
-COPY ./docker/Data_Processing/requirements.txt requirements.txt
+COPY ./docker/1_Data_Processing_save_ids/requirements.txt requirements.txt
 
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
-COPY ./docker/Data_Processing /app
+COPY ./docker/1_Data_Processing_save_ids /app
 COPY ./src /src
 
 # Set up the volume for the data folder

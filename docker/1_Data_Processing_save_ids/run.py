@@ -2,9 +2,8 @@ import sys
 sys.path.append('../src')
 
 from wikidata_dumpreader import WikidataDumpReader
-from wikidataDB import WikidataID, WikidataEntity, Session
+from wikidataDB import WikidataID
 from multiprocessing import Manager
-from sqlalchemy import select
 import asyncio
 import gc
 

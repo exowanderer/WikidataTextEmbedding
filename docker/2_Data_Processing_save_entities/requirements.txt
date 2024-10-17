@@ -1,0 +1,5 @@
+tqdm
+sqlalchemy
+psutil
+transformers
+orjson
