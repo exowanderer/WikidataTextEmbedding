@@ -4,7 +4,7 @@ import orjson
 import asyncio
 import time
 import psutil
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from multiprocessing import Queue, Value
 
 class WikidataDumpReader:
@@ -88,21 +88,17 @@ class WikidataDumpReader:
         - Prints progress and memory usage statistics.
         """
         start = time.time()
-        print("Running...")
-        with tqdm(desc="Running...") as progressbar:
-            while (not self.finished.value) or (not self.queue.empty()):
-                time.sleep(3)
+        while (not self.finished.value) or (not self.queue.empty()):
+            time.sleep(3)
 
-                time_per_iteration_s = time.time() - start
-                lines_per_s = self.iterations.value / time_per_iteration_s
+            time_per_iteration_s = time.time() - start
+            lines_per_s = self.iterations.value / time_per_iteration_s
 
-                process = psutil.Process()
-                memory_info = process.memory_info()
-                memory_usage_mb = memory_info.rss / 1024 ** 2
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            memory_usage_mb = memory_info.rss / 1024 ** 2
 
-                progressbar.n = self.iterations.value
-                progressbar.set_description(f"Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB")
-                progressbar.refresh()
+            print(f"Items Processes: {self.iterations.value} \t Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB")
 
     def _producer(self, max_iterations):
         """
