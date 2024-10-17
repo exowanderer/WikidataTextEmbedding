@@ -1,0 +1,16 @@
+services:
+  data_processing:
+    build:
+      context: .
+      dockerfile: ./docker/Data_Processing/Dockerfile
+    volumes:
+      - ./data:/data  # Mount the ./data folder from the host to /data in the container
+    deploy:
+      resources:
+        limits:
+          cpus: '12.0'
+
+    container_name: data_processor
+    environment:
+      - PYTHONUNBUFFERED=1
+    cpu_count: 12

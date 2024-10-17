@@ -1,15 +1,14 @@
 import gzip
 import bz2
 import orjson
-import sys
 import asyncio
 import time
 import psutil
-from tqdm import tqdm
-from multiprocessing import Pool, Queue, Event, Value
+from tqdm.auto import tqdm
+from multiprocessing import Queue, Value
 
 class WikidataDumpReader:
-    def __init__(self, file_path, num_processes=4, batch_size=1000, queue_size=10000, skiplines=0):
+    def __init__(self, file_path, num_processes=4, batch_size=1000, queue_size=1000, skiplines=0):
         """
         Initializes the reader with the file path, number of processes for multiprocessing,
         and batch size for reading lines.
@@ -68,7 +67,6 @@ class WikidataDumpReader:
         - max_iterations: Maximum number of iterations for processing (default is None).
         - verbose: If True, prints processing stats (default is True).
         """
-
         producer = asyncio.to_thread(self._producer, max_iterations)
         consumers = [
             asyncio.to_thread(self._consumer, handler_func) for _ in range(self.num_processes)
@@ -90,6 +88,7 @@ class WikidataDumpReader:
         - Prints progress and memory usage statistics.
         """
         start = time.time()
+        print("Running...")
         with tqdm(desc="Running...") as progressbar:
             while (not self.finished.value) or (not self.queue.empty()):
                 time.sleep(3)
@@ -104,7 +103,6 @@ class WikidataDumpReader:
                 progressbar.n = self.iterations.value
                 progressbar.set_description(f"Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB")
                 progressbar.refresh()
-
 
     def _producer(self, max_iterations):
         """
@@ -145,7 +143,7 @@ class WikidataDumpReader:
             lines_batch = None
             try:
                 lines_batch = self.queue.get(timeout=1)
-            except:
+            except Exception as e:
                 if self.finished.value:
                     break
 
@@ -205,7 +203,7 @@ class WikidataDumpReader:
             else:
                 raise ValueError("Zip file extension is not supported")
 
-            for _ in tqdm(range(self.skiplines)):
+            for _ in range(self.skiplines):
                 file.readline()
 
             while True:

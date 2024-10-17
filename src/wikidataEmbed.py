@@ -1,32 +1,63 @@
 from datetime import datetime, date
 import re
-from transformers import AutoModel
 from typing import List
 from wikidataDB import WikidataEntity
+from transformers import AutoModel, AutoTokenizer
+import torch
 
-class WikidataEmbed:
-    def __init__():
-        pass
-
-    def entity_to_text(entity, with_desc=False):
+class WikidataTextifier:
+    def __init__(self, with_claim_desc=False, with_claim_aliases=False, with_property_desc=False, with_property_aliases=False):
         """
-        Converts a Wikidata entity to a readable text string, including its label, description,
-        and aliases, as well as a list of its properties.
+        Initializes the WikidataTextifier with options to include descriptions and aliases for both entities and properties.
+
+        Parameters:
+        - with_claim_desc: Whether to include the descriptions of entities in claims in the output text.
+        - with_claim_aliases: Whether to include the aliases of entities in claims in the output text.
+        - with_property_desc: Whether to include the descriptions of claim properties in the output text.
+        - with_property_aliases: Whether to include the aliases of claim properties in the output text.
+        """
+        self.with_claim_desc = with_claim_desc
+        self.with_claim_aliases = with_claim_aliases
+        self.with_property_desc = with_property_desc
+        self.with_property_aliases = with_property_aliases
+
+    def merge_entity_property_text(self, entity_description, properties):
+        """
+        Combines the entity description and its claims into a single text string.
+
+        Parameters:
+        - entity_description: A string representing the entity's label, description, and aliases.
+        - properties: A list of strings representing the claims of the entity.
+
+        Returns:
+        - A string representation of the entity, its description, label, aliases, and its claims. If there are no claims, the description ends with a period.
+        """
+        entity_text = entity_description + f'. Attributes include: {("".join(properties) if (len(properties) > 0) else ".")}'
+        return entity_text
+
+    def entity_to_text(self, entity, as_list=False):
+        """
+        Converts a Wikidata entity into a readable text string, including its label, description, aliases, and claims.
 
         Parameters:
         - entity: A WikidataEntity object that contains information about the entity.
-        - with_desc: Whether to include the entity descriptions in the output text.
+        - as_list: If True, returns the entity description and a list of claim strings separately. If False, returns a combined text string.
 
         Returns:
-        - A string representation of the entity, its description, and its properties.
+        - If as_list is False: A string representing the entity, its description, label, aliases, and its claims.
+        - If as_list is True:
+            - entity_description: A string representing the entity's label, description, and aliases.
+            - properties: A list of strings representing the entity's claims.
         """
-        properties = WikidataEmbed.properties_to_text(entity.claims, with_desc=with_desc)
-        text = f"{entity.label}, {entity.description}"
-        text += (f", also known as {', '.join(entity.aliases)}" if (len(entity.aliases) > 0) else "")
-        text += (f". Attributes include: {properties}" if (len(properties) > 0) else ".")
-        return text
+        properties = self.properties_to_text(entity.claims)
+        entity_description = f"{entity.label}, {entity.description}"
+        entity_description += (f", also known as {', '.join(entity.aliases)}" if (len(entity.aliases) > 0) else "")
 
-    def mainsnak_to_value(mainsnak, with_desc=False):
+        if as_list:
+            return entity_description, properties
+        return self.merge_entity_property_text(entity_description, properties)
+
+    def mainsnak_to_value(self, mainsnak):
         """
         Converts a Wikidata mainsnak to a readable value. A mainsnak is a part of a claim and
         stores the actual value of the statement.
@@ -34,7 +65,6 @@ class WikidataEmbed:
 
         Parameters:
         - mainsnak: The snak object that contains the value and datatype information.
-        - with_desc: Whether to include the description of the value in the output text.
 
         Returns:
         - A string representation of the value or None if the value cannot be parsed.
@@ -47,8 +77,11 @@ class WikidataEmbed:
                     return None
 
                 text = entity.label
-                if with_desc:
+                if self.with_claim_desc:
                     text += f", {entity.description}"
+
+                if self.with_claim_aliases:
+                    text += (f", also known as {', '.join(entity.aliases)}" if (len(entity.aliases) > 0) else "")
                 return text
 
             elif mainsnak.get('datatype', '') == 'monolingualtext':
@@ -58,7 +91,7 @@ class WikidataEmbed:
                 return mainsnak['datavalue']['value']
 
             elif mainsnak.get('datatype', '') == 'time':
-                return WikidataEmbed.time_to_text(mainsnak['datavalue']['value'])
+                return self.time_to_text(mainsnak['datavalue']['value'])
 
             elif mainsnak.get('datatype', '') == 'quantity':
                 text = mainsnak['datavalue']['value']['amount']
@@ -72,7 +105,7 @@ class WikidataEmbed:
 
         return None
 
-    def qualifiers_to_text(qualifiers):
+    def qualifiers_to_text(self, qualifiers):
         """
         Converts a list of qualifiers to a readable text string.
         Qualifiers provide additional information about a claim.
@@ -88,7 +121,7 @@ class WikidataEmbed:
             q_data = []
 
             for q in qualifier:
-                value = WikidataEmbed.mainsnak_to_value(q, with_desc=False)
+                value = self.mainsnak_to_value(q)
                 if value:
                     q_data.append(value)
 
@@ -96,29 +129,28 @@ class WikidataEmbed:
                 property = WikidataEntity.get_entity(pid)
                 if property:
                     if len(text) > 0:
-                        text += ' \t '
+                        text += ' ; '
                     text += f"{property.label}: {', '.join(q_data)}"
         return text
 
 
-    def properties_to_text(properties, with_desc=False):
+    def properties_to_text(self, properties):
         """
         Converts a list of properties (claims) to a readable text string.
 
         Parameters:
         - properties: A dictionary of properties (claims) with property IDs as keys.
-        - with_desc: Whether to include descriptions of the properties in the output.
 
         Returns:
         - A string representation of the properties and their values.
         """
-        text = ""
+        properties_text = []
         for pid, claim in properties.items():
             p_data = []
 
             for c in claim:
-                value = WikidataEmbed.mainsnak_to_value(c.get('mainsnak', c), with_desc=with_desc)
-                qualifiers = WikidataEmbed.qualifiers_to_text(c.get('qualifiers', {}))
+                value = self.mainsnak_to_value(c.get('mainsnak', c))
+                qualifiers = self.qualifiers_to_text(c.get('qualifiers', {}))
                 if value:
                     if len(qualifiers) > 0:
                         value += f" ({qualifiers})"
@@ -127,17 +159,22 @@ class WikidataEmbed:
             if len(p_data) > 0:
                 property = WikidataEntity.get_entity(pid)
                 if property:
-                    text += f"\n- {property.label}"
-                    if with_desc:
+                    text = f"\n- {property.label}"
+                    if self.with_property_desc:
                         text += f", {property.description}"
 
-                    if len(p_data) > 1:
-                        text += f": - {'\n \t- '.join(p_data)}"
-                    else:
-                        text += f": {p_data[0]}"
-        return text
+                    if self.with_property_aliases:
+                        text += (f", also known as {', '.join(property.aliases)}" if (len(property.aliases) > 0) else "")
 
-    def quantity_to_text(quantity_data):
+                    if len(p_data) > 1:
+                        p_data_text = ('", \n "'.join(p_data))
+                    else:
+                        p_data_text = p_data[0]
+                    text += f': "{p_data_text}"'
+                    properties_text.append(text)
+        return properties_text
+
+    def quantity_to_text(self, quantity_data):
         """
         Converts quantity data into a readable text string.
 
@@ -160,7 +197,7 @@ class WikidataEmbed:
 
         return quantity + (f" {unit}" if unit else "")
 
-    def time_to_text(time_data):
+    def time_to_text(self, time_data):
         """
         Converts time data into a readable text string.
 
@@ -209,40 +246,124 @@ class WikidataEmbed:
         elif precision == 10:
             return f"{year} {month_str}"
         elif precision == 9:
-            return f"{year} {'CE' if year > 0 else 'BCE'}"
+            return f"{year}{'' if year > 0 else ' BC'}"
         elif precision == 8:
             decade = (year // 10) * 10
-            return f"{decade}s {'CE' if year > 0 else 'BCE'}"
+            return f"{decade}s {'AD' if year > 0 else 'BC'}"
         elif precision == 7:
             century = (year // 100) + 1 if year > 0 else (year // 100)
-            return f"{abs(century)}th century {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(century)}th century {'AD' if year > 0 else 'BC'}"
         elif precision == 6:
             millennium = (year // 1000) + 1 if year > 0 else (year // 1000)
-            return f"{abs(millennium)}th millennium {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(millennium)}th millennium {'AD' if year > 0 else 'BC'}"
         elif precision == 5:
-            return f"{abs(year) // 10_000} ten thousand years {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(year) // 10_000} ten thousand years {'AD' if year > 0 else 'BC'}"
         elif precision == 4:
-            return f"{abs(year) // 100_000} hundred thousand years {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(year) // 100_000} hundred thousand years {'AD' if year > 0 else 'BC'}"
         elif precision == 3:
-            return f"{abs(year) // 1_000_000} million years {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(year) // 1_000_000} million years {'AD' if year > 0 else 'BC'}"
         elif precision == 2:
-            return f"{abs(year) // 10_000_000} tens of millions of years {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(year) // 10_000_000} tens of millions of years {'AD' if year > 0 else 'BC'}"
         elif precision == 1:
-            return f"{abs(year) // 100_000_000} hundred million years {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(year) // 100_000_000} hundred million years {'AD' if year > 0 else 'BC'}"
         elif precision == 0:
-            return f"{abs(year) // 1_000_000_000} billion years {'CE' if year > 0 else 'BCE'}"
+            return f"{abs(year) // 1_000_000_000} billion years {'AD' if year > 0 else 'BC'}"
         else:
             raise ValueError(f"Unknown precision value {precision}")
 
 class JinaAIEmbeddings:
     def __init__(self, passage_task="retrieval.passage", query_task="retrieval.query", embedding_dim=1024):
-        self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True).to('cuda')
+        """
+        Initializes the JinaAIEmbeddings class with the model, tokenizer, and task identifiers.
+
+        Parameters:
+        - passage_task: Task identifier for embedding documents (default: "retrieval.passage").
+        - query_task: Task identifier for embedding queries (default: "retrieval.query").
+        - embedding_dim: The dimensionality of the embeddings (default: 1024).
+        """
         self.passage_task = passage_task
         self.query_task = query_task
         self.embedding_dim = embedding_dim
 
+        self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
+
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return self.model.encode(texts, task=self.passage_task, truncate_dim=self.embedding_dim)
+        """
+        Generates embeddings for a list of documents (passages).
+
+        Parameters:
+        - texts: A list of document strings to embed.
+
+        Returns:
+        - A list of embeddings, each corresponding to a document, with a dimensionality specified by embedding_dim.
+        """
+        with torch.no_grad():
+            return self.model.encode(texts, task=self.passage_task, truncate_dim=self.embedding_dim)
 
     def embed_query(self, query: str) -> List[float]:
-        return self.model.encode([query], task=self.query_task, truncate_dim=self.embedding_dim)[0]
+        """
+        Generates an embedding for a single query.
+
+        Parameters:
+        - query: The query string to embed.
+
+        Returns:
+        - A single embedding as a list of floats with a dimensionality specified by embedding_dim.
+        """
+        with torch.no_grad():
+            return self.model.encode([query], task=self.query_task, truncate_dim=self.embedding_dim)[0]
+
+    def chunk_text(self, entity, textifier):
+        """
+        Chunks a text into smaller pieces if the token length exceeds the model's maximum input length.
+
+        Parameters:
+        - entity: The entity containing the text to be chunked.
+        - textifier: A WikidataTextifier instance that helps convert the entity and its properties into text.
+
+        Returns:
+        - A list of text chunks that fit within the model's maximum token length.
+        """
+        entity_description, properties = textifier.entity_to_text(entity, as_list=True)
+        entity_text = textifier.merge_entity_property_text(entity_description, properties)
+        max_length = self.tokenizer.model_max_length -2
+
+        # If the full text does not exceed the maximum tokens then we only return 1 chunk.
+        tokens_ids = self.tokenizer.encode(entity_text)
+        if len(tokens_ids) < max_length:
+            return [entity_text]
+
+        # If the label and description already exceed the maximum tokens then we will truncate it and will not include chunks that include claims.
+        tokens_ids = self.tokenizer.encode(entity_description)
+        if len(tokens_ids) >= max_length:
+            entity_text = self.tokenizer.decode(tokens_ids[:max_length], skip_special_tokens=True, clean_up_tokenization_spaces=False)
+            return [entity_text]
+
+        # Create the chunks assuming the description/label text is smaller than the maximum tokens.
+        chunks = []
+        chunk_claims = []
+        for claim in properties:
+            entity_text = textifier.merge_entity_property_text(entity_description, chunk_claims+[claim])
+            tokens_ids = self.tokenizer.encode(entity_text)
+
+            # Check when including the current claim if we exceed the maximum tokens.
+            if len(tokens_ids) >= max_length:
+                entity_text = self.tokenizer.decode(tokens_ids[:max_length], skip_special_tokens=True, clean_up_tokenization_spaces=False)
+                chunks.append(entity_text)
+                if len(chunk_claims) == 0:
+                    # If we do exceed it but there's no claim previously added to the chunks, then it means the current claim alone exceeds the maximum tokens, and we already included it in a trimmed chunk alone.
+                    chunk_claims = []
+                else:
+                    # Include the claim in a new chunk so where it's information doesn't get trimmed.
+                    chunk_claims = [claim]
+            else:
+                chunk_claims.append(claim)
+
+        if len(chunk_claims) > 0:
+            entity_text = textifier.merge_entity_property_text(entity_description, chunk_claims)
+            tokens_ids = self.tokenizer.encode(entity_text)
+            entity_text = self.tokenizer.decode(tokens_ids[:max_length], skip_special_tokens=True, clean_up_tokenization_spaces=False)
+            chunks.append(entity_text)
+
+        return chunks
