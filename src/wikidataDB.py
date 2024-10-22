@@ -4,7 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import TypeDecorator
 import json
 
-engine = create_engine('sqlite:///../data/Wikidata/sqlite_enwiki.db')
+engine = create_engine('sqlite:///../data/Wikidata/sqlite_enwiki.db',
+    pool_size=5,       # Limit the number of open connections
+    max_overflow=10,   # Allow extra connections beyond pool_size
+    pool_recycle=10  # Recycle connections every 10 seconds
+)
 Base = declarative_base()
 Base.metadata.create_all(engine)
 
@@ -44,6 +48,7 @@ class WikidataEntity(Base):
         Returns:
         - True if the operation was successful, False otherwise.
         """
+        worked = False
         with Session() as session:
             try:
                 session.execute(
@@ -57,11 +62,12 @@ class WikidataEntity(Base):
                     data
                 )
                 session.commit()
-                return True
+                session.flush()
+                worked = True
             except Exception as e:
                 session.rollback()
                 print(e)
-        return False
+        return worked
 
     @staticmethod
     def add_entity(id, label, description, claims, aliases):
@@ -78,6 +84,7 @@ class WikidataEntity(Base):
         Returns:
         - True if the operation was successful, False otherwise.
         """
+        worked = False
         with Session() as session:
             try:
                 new_entry = WikidataEntity(
@@ -89,11 +96,12 @@ class WikidataEntity(Base):
                 )
                 session.add(new_entry)
                 session.commit()
-                return True
+                session.flush()
+                worked = True
             except Exception as e:
                 session.rollback()
                 print(f"Error: {e}")
-        return False
+        return worked
 
     @staticmethod
     def get_entity(id):
@@ -221,6 +229,7 @@ class WikidataID(Base):
         Returns:
         - True if the operation was successful, False otherwise.
         """
+        worked = False
         with Session() as session:
             try:
                 session.execute(
@@ -237,11 +246,12 @@ class WikidataID(Base):
                     data
                 )
                 session.commit()
-                return True
+                session.flush()
+                worked = True
             except Exception as e:
                 session.rollback()
                 print(e)
-        return False
+        return worked
 
     @staticmethod
     def add_id(id, in_wikipedia=False, is_property=False):
@@ -256,16 +266,18 @@ class WikidataID(Base):
         Returns:
         - True if the operation was successful, False otherwise.
         """
+        worked = False
         with Session() as session:
             try:
                 new_entry = WikidataID(id=id, in_wikipedia=in_wikipedia, is_property=is_property)
                 session.add(new_entry)
                 session.commit()
-                return True
+                session.flush()
+                worked = True
             except Exception as e:
                 session.rollback()
                 print(e)
-        return False
+        return worked
 
     @staticmethod
     def get_id(id):
@@ -313,41 +325,41 @@ class WikidataID(Base):
         if item is None:
             return []
 
-        ids = [{'id': item['id'], 'in_wikipedia': WikidataID.is_in_wikipedia(item, language=language), 'is_property': False}]
+        batch_ids = [{'id': item['id'], 'in_wikipedia': WikidataID.is_in_wikipedia(item, language=language), 'is_property': False}]
 
         for pid,claim in item.get('claims', {}).items():
-            ids.append({'id': pid, 'in_wikipedia': False, 'is_property': True})
+            batch_ids.append({'id': pid, 'in_wikipedia': False, 'is_property': True})
 
             for c in claim:
                 if ('mainsnak' in c) and ('datavalue' in c['mainsnak']):
                     if (c['mainsnak'].get('datatype', '') == 'wikibase-item'):
                         id = c['mainsnak']['datavalue']['value']['id']
-                        ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
+                        batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
 
                     elif (c['mainsnak'].get('datatype', '') == 'wikibase-property'):
                         id = c['mainsnak']['datavalue']['value']['id']
-                        ids.append({'id': id, 'in_wikipedia': False, 'is_property': True})
+                        batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': True})
 
                     elif (c['mainsnak'].get('datatype', '') == 'quantity') and (c['mainsnak']['datavalue']['value'].get('unit', '1') != '1'):
                         id = c['mainsnak']['datavalue']['value']['unit'].rsplit('/', 1)[1]
-                        ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
+                        batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
 
                 if 'qualifiers' in c:
                     for pid, qualifier in c['qualifiers'].items():
-                        ids.append({'id': pid, 'in_wikipedia': False, 'is_property': True})
+                        batch_ids.append({'id': pid, 'in_wikipedia': False, 'is_property': True})
                         for q in qualifier:
                             if ('datavalue' in q):
                                 if (q['datatype'] == 'wikibase-item'):
                                     id = q['datavalue']['value']['id']
-                                    ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
+                                    batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
 
                                 elif(q['datatype'] == 'wikibase-property'):
                                     id = q['datavalue']['value']['id']
-                                    ids.append({'id': id, 'in_wikipedia': False, 'is_property': True})
+                                    batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': True})
 
                                 elif (q['datatype'] == 'quantity') and (q['datavalue']['value'].get('unit', '1') != '1'):
                                     id = q['datavalue']['value']['unit'].rsplit('/', 1)[1]
-                                    ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
-        return ids
+                                    batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
+        return batch_ids
 
 Base.metadata.create_all(engine)

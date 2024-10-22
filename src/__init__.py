@@ -1,3 +1,3 @@
 from .wikidata_dumpreader import WikidataDumpReader
 from .wikidataDB import WikidataEntity, WikidataID
-from .wikidataEmbed import WikidataEmbed
+from .wikidataEmbed import WikidataTextifier, JinaAIEmbeddings

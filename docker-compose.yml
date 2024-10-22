@@ -1,0 +1,32 @@
+services:
+  data_processing_save_ids:
+    build:
+      context: .
+      dockerfile: ./docker/1_Data_Processing_save_ids/Dockerfile
+    volumes:
+      - ./data:/data  # Mount the ./data folder from the host to /data in the container
+    deploy:
+      resources:
+        limits:
+          cpus: '12.0'
+
+    container_name: data_processing_save_ids
+    environment:
+      - PYTHONUNBUFFERED=1
+    cpu_count: 12
+
+  data_processing_save_entities:
+    build:
+      context: .
+      dockerfile: ./docker/2_Data_Processing_save_entities/Dockerfile
+    volumes:
+      - ./data:/data  # Mount the ./data folder from the host to /data in the container
+    deploy:
+      resources:
+        limits:
+          cpus: '12.0'
+
+    container_name: data_processing_save_entities
+    environment:
+      - PYTHONUNBUFFERED=1
+    cpu_count: 12
