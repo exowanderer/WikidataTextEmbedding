@@ -9,8 +9,8 @@ def main():
 
     # Arguments
     parser.add_argument('--api_key_json', required=True, help='Path to the API key JSON file')
-    parser.add_argument('--query', required=True, help='User query for similarity search')
-    parser.add_argument('--k', type=int, default=10, help='Number of top results to return')
+    parser.add_argument('--query', '-q', required=True, help='User query for similarity search')
+    parser.add_argument('--k', '-k', type=int, default=10, help='Number of top results to return')
 
     # Parse arguments
     args = parser.parse_args()
@@ -43,6 +43,7 @@ def main():
     # Print the results
     for result in results:
         print(result.metadata['QID'])
+        print(result.page_content)
 
 if __name__ == "__main__":
     main()
