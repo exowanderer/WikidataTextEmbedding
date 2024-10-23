@@ -26,5 +26,5 @@ Once all entities are saved, this container processes the saved entities in SQLi
 To run the container:
 
 ```bash
-docker compose up data_processing_save_entities --build
+docker compose up add_wikidata_to_astra --build
 ```
