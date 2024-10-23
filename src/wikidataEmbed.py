@@ -91,7 +91,11 @@ class WikidataTextifier:
                 return mainsnak['datavalue']['value']
 
             elif mainsnak.get('datatype', '') == 'time':
-                return self.time_to_text(mainsnak['datavalue']['value'])
+                try:
+                    return self.time_to_text(mainsnak['datavalue']['value'])
+                except Exception as e:
+                    print(e)
+                    return mainsnak['datavalue']['value']["time"]
 
             elif mainsnak.get('datatype', '') == 'quantity':
                 text = mainsnak['datavalue']['value']['amount']
@@ -271,6 +275,67 @@ class WikidataTextifier:
         else:
             raise ValueError(f"Unknown precision value {precision}")
 
+    def chunk_text(self, entity, tokenizer):
+        """
+        Chunks a text into smaller pieces if the token length exceeds the model's maximum input length.
+
+        Parameters:
+        - entity: The entity containing the text to be chunked.
+        - textifier: A WikidataTextifier instance that helps convert the entity and its properties into text.
+
+        Returns:
+        - A list of text chunks that fit within the model's maximum token length.
+        """
+        entity_description, properties = self.entity_to_text(entity, as_list=True)
+        entity_text = self.merge_entity_property_text(entity_description, properties)
+        max_length = 500
+
+        # If the full text does not exceed the maximum tokens then we only return 1 chunk.
+        tokens = tokenizer(entity_text, add_special_tokens=False, return_offsets_mapping=True)
+        if len(tokens['input_ids']) < max_length:
+            return [entity_text]
+
+        # If the label and description already exceed the maximum tokens then we will truncate it and will not include chunks that include claims.
+        tokens = tokenizer(entity_description, add_special_tokens=False, return_offsets_mapping=True)
+        token_ids, offsets = tokens['input_ids'], tokens['offset_mapping']
+        if len(token_ids) >= max_length:
+            start, end = offsets[0][0], offsets[max_length - 1][1]
+            return [entity_text[start:end]]  # Return the truncated portion of the original text
+
+        # Create the chunks assuming the description/label text is smaller than the maximum tokens.
+        chunks = []
+        chunk_claims = []
+        for claim in properties:
+            entity_text = self.merge_entity_property_text(entity_description, chunk_claims+[claim])
+            tokens = tokenizer(entity_text, add_special_tokens=False, return_offsets_mapping=True)
+            token_ids, offsets = tokens['input_ids'], tokens['offset_mapping']
+
+            # Check when including the current claim if we exceed the maximum tokens.
+            if len(token_ids) >= max_length:
+                start, end = offsets[0][0], offsets[max_length - 1][1]
+                chunks.append(entity_text[start:end])
+                if len(chunk_claims) == 0:
+                    # If we do exceed it but there's no claim previously added to the chunks, then it means the current claim alone exceeds the maximum tokens, and we already included it in a trimmed chunk alone.
+                    chunk_claims = []
+                else:
+                    # Include the claim in a new chunk so where it's information doesn't get trimmed.
+                    chunk_claims = [claim]
+            else:
+                chunk_claims.append(claim)
+
+        if len(chunk_claims) > 0:
+            entity_text = self.merge_entity_property_text(entity_description, chunk_claims)
+            tokens = tokenizer(entity_text, add_special_tokens=False, return_offsets_mapping=True)
+            token_ids, offsets = tokens['input_ids'], tokens['offset_mapping']
+
+            if len(token_ids) >= max_length:
+                start, end = offsets[0][0], offsets[max_length - 1][1]
+            else:
+                start, end = offsets[0][0], offsets[-1][1]
+            chunks.append(entity_text[start:end])
+
+        return chunks
+
 class JinaAIEmbeddings:
     def __init__(self, passage_task="retrieval.passage", query_task="retrieval.query", embedding_dim=1024):
         """
@@ -286,7 +351,6 @@ class JinaAIEmbeddings:
         self.embedding_dim = embedding_dim
 
         self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
-        self.tokenizer = AutoTokenizer.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
@@ -313,57 +377,3 @@ class JinaAIEmbeddings:
         """
         with torch.no_grad():
             return self.model.encode([query], task=self.query_task, truncate_dim=self.embedding_dim)[0]
-
-    def chunk_text(self, entity, textifier):
-        """
-        Chunks a text into smaller pieces if the token length exceeds the model's maximum input length.
-
-        Parameters:
-        - entity: The entity containing the text to be chunked.
-        - textifier: A WikidataTextifier instance that helps convert the entity and its properties into text.
-
-        Returns:
-        - A list of text chunks that fit within the model's maximum token length.
-        """
-        entity_description, properties = textifier.entity_to_text(entity, as_list=True)
-        entity_text = textifier.merge_entity_property_text(entity_description, properties)
-        max_length = self.tokenizer.model_max_length -2
-
-        # If the full text does not exceed the maximum tokens then we only return 1 chunk.
-        tokens_ids = self.tokenizer.encode(entity_text)
-        if len(tokens_ids) < max_length:
-            return [entity_text]
-
-        # If the label and description already exceed the maximum tokens then we will truncate it and will not include chunks that include claims.
-        tokens_ids = self.tokenizer.encode(entity_description)
-        if len(tokens_ids) >= max_length:
-            entity_text = self.tokenizer.decode(tokens_ids[:max_length], skip_special_tokens=True, clean_up_tokenization_spaces=False)
-            return [entity_text]
-
-        # Create the chunks assuming the description/label text is smaller than the maximum tokens.
-        chunks = []
-        chunk_claims = []
-        for claim in properties:
-            entity_text = textifier.merge_entity_property_text(entity_description, chunk_claims+[claim])
-            tokens_ids = self.tokenizer.encode(entity_text)
-
-            # Check when including the current claim if we exceed the maximum tokens.
-            if len(tokens_ids) >= max_length:
-                entity_text = self.tokenizer.decode(tokens_ids[:max_length], skip_special_tokens=True, clean_up_tokenization_spaces=False)
-                chunks.append(entity_text)
-                if len(chunk_claims) == 0:
-                    # If we do exceed it but there's no claim previously added to the chunks, then it means the current claim alone exceeds the maximum tokens, and we already included it in a trimmed chunk alone.
-                    chunk_claims = []
-                else:
-                    # Include the claim in a new chunk so where it's information doesn't get trimmed.
-                    chunk_claims = [claim]
-            else:
-                chunk_claims.append(claim)
-
-        if len(chunk_claims) > 0:
-            entity_text = textifier.merge_entity_property_text(entity_description, chunk_claims)
-            tokens_ids = self.tokenizer.encode(entity_text)
-            entity_text = self.tokenizer.decode(tokens_ids[:max_length], skip_special_tokens=True, clean_up_tokenization_spaces=False)
-            chunks.append(entity_text)
-
-        return chunks

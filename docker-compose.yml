@@ -5,6 +5,7 @@ services:
       dockerfile: ./docker/1_Data_Processing_save_ids/Dockerfile
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
+    tty: true
     deploy:
       resources:
         limits:
@@ -21,6 +22,7 @@ services:
       dockerfile: ./docker/2_Data_Processing_save_entities/Dockerfile
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
+    tty: true
     deploy:
       resources:
         limits:
@@ -30,3 +32,15 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     cpu_count: 12
+
+
+  add_wikidata_to_astra:
+    build:
+      context: .
+      dockerfile: ./docker/3_Add_Wikidata_to_AstraDB/Dockerfile
+    volumes:
+      - ./data:/data
+    tty: true
+    container_name: add_wikidata_to_astra
+    environment:
+      - PYTHONUNBUFFERED=1
