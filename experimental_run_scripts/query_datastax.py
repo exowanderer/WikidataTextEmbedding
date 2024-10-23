@@ -42,7 +42,7 @@ def main():
 
     # Print the results
     for result in results:
-        print(result.metadata['QID'])
+        print(result.page_content)
 
 if __name__ == "__main__":
     main()
