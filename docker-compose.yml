@@ -33,7 +33,6 @@ services:
       - PYTHONUNBUFFERED=1
     cpu_count: 12
 
-
   add_wikidata_to_astra:
     build:
       context: .
@@ -42,5 +41,43 @@ services:
       - ./data:/data
     tty: true
     container_name: add_wikidata_to_astra
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: 1
+      NVIDIA: "true"
+      SAMPLE: "true"
+      API_KEY: "datastax_wikidata_nvidia.json"
+      COLLECTION_NAME: "wikidata_test_v2"
+
+  run_retrieval:
+    build:
+      context: .
+      dockerfile: ./docker/4_Run_Retrieval/Dockerfile
+    volumes:
+      - ./data:/data
+    tty: true
+    container_name: run_retrieval
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      PYTHONUNBUFFERED: 1
+      JINA: "true"
+      API_KEY: "datastax_wikidata_nvidia.json"
+      COLLECTION_NAME: "wikidata_test_v1"
+      BATCH_SIZE: 4
+      EVALUATION_PATH: "Wikidata-Disamb/processed_dataframe_filtered.pkl"
+      QUERY_COL: "Sentence"
+      COMPARATIVE: "true"
+      COMPARATIVE_COLS: "Correct QID,Wrong QID"
+      LANGUAGE: "en"

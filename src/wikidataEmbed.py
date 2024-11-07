@@ -275,7 +275,7 @@ class WikidataTextifier:
         else:
             raise ValueError(f"Unknown precision value {precision}")
 
-    def chunk_text(self, entity, tokenizer):
+    def chunk_text(self, entity, tokenizer, max_length=500):
         """
         Chunks a text into smaller pieces if the token length exceeds the model's maximum input length.
 
@@ -288,7 +288,7 @@ class WikidataTextifier:
         """
         entity_description, properties = self.entity_to_text(entity, as_list=True)
         entity_text = self.merge_entity_property_text(entity_description, properties)
-        max_length = 500
+        max_length = max_length
 
         # If the full text does not exceed the maximum tokens then we only return 1 chunk.
         tokens = tokenizer(entity_text, add_special_tokens=False, return_offsets_mapping=True)
@@ -350,7 +350,8 @@ class JinaAIEmbeddings:
         self.query_task = query_task
         self.embedding_dim = embedding_dim
 
-        self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
+        self.model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True).to('cuda')
+        self.tokenizer = AutoTokenizer.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
@@ -365,7 +366,7 @@ class JinaAIEmbeddings:
         with torch.no_grad():
             return self.model.encode(texts, task=self.passage_task, truncate_dim=self.embedding_dim)
 
-    def embed_query(self, query: str) -> List[float]:
+    def embed_query(self, text: str) -> List[float]:
         """
         Generates an embedding for a single query.
 
@@ -376,4 +377,4 @@ class JinaAIEmbeddings:
         - A single embedding as a list of floats with a dimensionality specified by embedding_dim.
         """
         with torch.no_grad():
-            return self.model.encode([query], task=self.query_task, truncate_dim=self.embedding_dim)[0]
+            return self.model.encode([text], task=self.query_task, truncate_dim=self.embedding_dim)[0]
