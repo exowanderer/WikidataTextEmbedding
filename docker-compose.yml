@@ -6,15 +6,9 @@ services:
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
     tty: true
-    deploy:
-      resources:
-        limits:
-          cpus: '12.0'
-
     container_name: data_processing_save_ids
     environment:
       - PYTHONUNBUFFERED=1
-    cpu_count: 12
 
   data_processing_save_entities:
     build:
@@ -23,15 +17,9 @@ services:
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
     tty: true
-    deploy:
-      resources:
-        limits:
-          cpus: '12.0'
-
     container_name: data_processing_save_entities
     environment:
       - PYTHONUNBUFFERED=1
-    cpu_count: 12
 
   add_wikidata_to_astra:
     build:
@@ -50,10 +38,12 @@ services:
               capabilities: [gpu]
     environment:
       PYTHONUNBUFFERED: 1
-      NVIDIA: "true"
-      SAMPLE: "true"
+      JINA: "true"
+      SAMPLE: "false"
       API_KEY: "datastax_wikidata_nvidia.json"
-      COLLECTION_NAME: "wikidata_test_v2"
+      BATCH_SIZE: 8
+      OFFSET: 0
+      COLLECTION_NAME: "wikidata_jina"
 
   run_retrieval:
     build:
@@ -70,14 +60,15 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
     environment:
       PYTHONUNBUFFERED: 1
-      JINA: "true"
+      NVIDIA: "true"
       API_KEY: "datastax_wikidata_nvidia.json"
-      COLLECTION_NAME: "wikidata_test_v1"
-      BATCH_SIZE: 4
+      COLLECTION_NAME: "wikidata"
+      BATCH_SIZE: 6
       EVALUATION_PATH: "Wikidata-Disamb/processed_dataframe_filtered.pkl"
-      QUERY_COL: "Sentence"
       COMPARATIVE: "true"
       COMPARATIVE_COLS: "Correct QID,Wrong QID"
+      QUERY_COL: "Sentence"
       LANGUAGE: "en"

@@ -275,6 +275,32 @@ class WikidataTextifier:
         else:
             raise ValueError(f"Unknown precision value {precision}")
 
+    def clean_claims_for_storage(claims):
+        """
+        Cleans Wikidata claims to prepare them for storage in a database.
+
+        Parameters:
+        - claims: A dictionary where each key is a property ID (pid) and each value is a list of claim statements related to the property.
+
+        Returns:
+        - A dictionary with cleaned claims.
+        """
+        def clean_item(self, item):
+            if 'datavalue' not in item['mainsnak']:
+                return {'type': item['mainsnak']['snaktype']}
+            if isinstance(item['mainsnak']['datavalue']['value'], dict):
+                value = {'type': item['mainsnak']['datavalue']['type'], **item['mainsnak']['datavalue']['value']}
+                if 'entity-type' in value:
+                    del value['entity-type']
+                return value
+            return {'type': item['mainsnak']['datavalue']['type'], 'value': item['mainsnak']['datavalue']['value']}
+
+        cleaned_claims = {
+            pid: [clean_item(item) for item in value]
+            for pid, value in claims.items()
+        }
+        return cleaned_claims
+
     def chunk_text(self, entity, tokenizer, max_length=500):
         """
         Chunks a text into smaller pieces if the token length exceeds the model's maximum input length.
