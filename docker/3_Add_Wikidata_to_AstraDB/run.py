@@ -3,7 +3,7 @@ sys.path.append('../src')
 
 from wikidataDB import Session, WikidataID, WikidataEntity
 from wikidataEmbed import WikidataTextifier, JinaAIEmbeddings
-from wikidataAstraDB import AstraDBConnect
+from wikidataRetriever import AstraDBConnect
 
 import json
 from tqdm import tqdm
@@ -40,10 +40,9 @@ if SAMPLE:
     sample_ids = sample_ids[sample_ids['In Wikipedia']]
 
 if __name__ == "__main__":
-    with tqdm(total=9203786) as progressbar:
+    with tqdm(total=9203786-OFFSET) as progressbar:
         with Session() as session:
             entities = session.query(WikidataEntity).join(WikidataID, WikidataEntity.id == WikidataID.id).filter(WikidataID.in_wikipedia == True).offset(OFFSET).yield_per(BATCH_SIZE)
-            progressbar.update(OFFSET)
             doc_batch = []
             ids_batch = []
 
@@ -55,7 +54,7 @@ if __name__ == "__main__":
                         md5_hash = hashlib.md5(chunks[chunk_i].encode('utf-8')).hexdigest()
                         metadata={
                             "MD5": md5_hash,
-                            "Claims": textifier.clean_claims_for_storage(entity.claims),
+                            #"Claims": textifier.clean_claims_for_storage(entity.claims),
                             "Label": entity.label,
                             "Description": entity.description,
                             "Aliases": entity.aliases,
@@ -63,7 +62,7 @@ if __name__ == "__main__":
                             "QID": entity.id,
                             "ChunkID": chunk_i+1,
                             "Language": LANGUAGE,
-                            "Dump Date": DUMPDATE
+                            "DumpDate": DUMPDATE
                         }
                         graph_store.add_document(id=f"{entity.id}_{chunk_i+1}", text=chunks[chunk_i], metadata=metadata)
 

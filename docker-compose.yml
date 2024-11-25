@@ -8,7 +8,8 @@ services:
     tty: true
     container_name: data_processing_save_ids
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: 1
+      LANGUAGE: "de"
 
   data_processing_save_entities:
     build:
@@ -19,7 +20,7 @@ services:
     tty: true
     container_name: data_processing_save_entities
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: 1
 
   add_wikidata_to_astra:
     build:
@@ -38,12 +39,12 @@ services:
               capabilities: [gpu]
     environment:
       PYTHONUNBUFFERED: 1
-      JINA: "true"
+      NVIDIA: "true"
       SAMPLE: "false"
       API_KEY: "datastax_wikidata_nvidia.json"
-      BATCH_SIZE: 8
-      OFFSET: 0
-      COLLECTION_NAME: "wikidata_jina"
+      BATCH_SIZE: 200
+      OFFSET: 9160000
+      COLLECTION_NAME: "qids_nvidia"
 
   run_retrieval:
     build:
@@ -63,12 +64,14 @@ services:
 
     environment:
       PYTHONUNBUFFERED: 1
-      NVIDIA: "true"
+      JINA: "true"
       API_KEY: "datastax_wikidata_nvidia.json"
-      COLLECTION_NAME: "wikidata"
-      BATCH_SIZE: 6
-      EVALUATION_PATH: "Wikidata-Disamb/processed_dataframe_filtered.pkl"
-      COMPARATIVE: "true"
-      COMPARATIVE_COLS: "Correct QID,Wrong QID"
-      QUERY_COL: "Sentence"
+      COLLECTION_NAME: "wikidata_test_v1"
+      BATCH_SIZE: 8
+      EVALUATION_PATH: "LC_QuAD/processed_dataframe.pkl"
+      # COMPARATIVE: "true"
+      # COMPARATIVE_COLS: "Correct QID,Wrong QID"
+      QUERY_COL: "Question"
       LANGUAGE: "en"
+      ELASTICSEARCH_URL: "http://localhost:9200"
+    network_mode: "host"

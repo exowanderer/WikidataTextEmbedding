@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../src')
 
-from wikidataAstraDB import AstraDBConnect
+from wikidataRetriever import AstraDBConnect, WikidataKeywordSearch
 
 import json
 from tqdm import tqdm
@@ -23,8 +23,10 @@ COMPARATIVE_COLS = os.getenv("COMPARATIVE_COLS")
 QUERY_COL = os.getenv("QUERY_COL")
 LANGUAGE = os.getenv("LANGUAGE", 'en')
 RESTART = os.getenv("RESTART", "false").lower() == "true"
+ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
 
-OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-{COLLECTION_NAME}-{LANGUAGE}_2"
+OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-{COLLECTION_NAME}-{LANGUAGE}"
+# OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-keyword-search-{LANGUAGE}"
 
 # Load the Database
 if not COLLECTION_NAME:
@@ -35,6 +37,7 @@ if not API_KEY_FILENAME:
 datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
 
 graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model='nvidia' if NVIDIA else 'jina', batch_size=BATCH_SIZE)
+# graph_store = WikidataKeywordSearch(ELASTICSEARCH_URL)
 
 #Load the Evaluation Dataset
 if not QUERY_COL:
@@ -74,4 +77,6 @@ if __name__ == "__main__":
 
             progressbar.update(len(batch))
             tqdm.write(progressbar.format_meter(progressbar.n, progressbar.total, progressbar.format_dict["elapsed"])) # tqdm is not wokring in docker compose. This is the alternative
-            pickle.dump(eval_data, open(f"../data/Evaluation Data/{OUTPUT_FILENAME}.pkl", "wb"))
+            if progressbar.n % 100 == 0:
+                pickle.dump(eval_data, open(f"../data/Evaluation Data/{OUTPUT_FILENAME}.pkl", "wb"))
+        pickle.dump(eval_data, open(f"../data/Evaluation Data/{OUTPUT_FILENAME}.pkl", "wb"))

@@ -1,14 +1,18 @@
 tqdm
 psutil
-transformers
 astrapy
 asyncio
+mediawikiapi
+pandas
+elasticsearch
 
+# Jina Model
+transformers
+einops
+
+# AstraDB
 langchain-core
 langchainhub
 langchain_experimental
 ragstack-ai-langchain[knowledge-store]==1.3.0
 langchain-astradb
-torch
-pandas
-einops

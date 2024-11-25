@@ -7,6 +7,10 @@ import requests
 import time
 from wikidataEmbed import JinaAIEmbeddings
 import asyncio
+from elasticsearch import Elasticsearch
+
+from mediawikiapi import MediaWikiAPI
+from mediawikiapi.config import Config
 
 class AstraDBConnect:
     def __init__(self, datastax_token, collection_name, model='nvidia', batch_size=8):
@@ -80,7 +84,6 @@ class AstraDBConnect:
                         time.sleep(5)
 
     async def get_similar_qids_async(self, query, filter_qid={}, K=50):
-        # Async function to retrieve similar QIDs
         while True:
             try:
                 results = self.graph_store.similarity_search_with_relevance_scores(query, k=K, filter=filter_qid)
@@ -115,7 +118,87 @@ class AstraDBConnect:
         return qids, scores
 
     async def batch_retrieve(self, queries_batch, K=50):
-        tasks = [self.get_similar_qids_async(query, K=K) for query in queries_batch]
+        tasks = [
+            self.get_similar_qids_async(queries_batch.iloc[i], K=K)
+            for i in range(len(queries_batch))
+        ]
+        results = await asyncio.gather(*tasks)
+
+        qids, scores = zip(*results)
+        return list(qids), list(scores)
+
+class WikidataKeywordSearch:
+    def __init__(self, url, index_name = 'wikidata'):
+        self.index_name = index_name
+        self.es = Elasticsearch(url)
+        if not self.es.indices.exists(index=self.index_name):
+            self.es.indices.create(index=self.index_name, body={
+            "mappings": {
+                "properties": {
+                    "text": {
+                        "type": "text"
+                    }
+                }
+            }
+        })
+
+    def search(self, query, K=50):
+        search_body = {
+            "query": {
+                "bool": {
+                    "should": [
+                        {
+                            "match": {
+                                "text": {
+                                    "query": query,
+                                    "operator": "or",
+                                    "boost": 1.0
+                                }
+                            }
+                        },
+                        {
+                            "match_all": {
+                                "boost": 0.01  # Lower boost to make match_all results less relevant
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": K,
+            "sort": [
+                {
+                    "_score": {
+                        "order": "desc"
+                    }
+                }
+            ]
+        }
+        response = self.es.search(index=self.index_name, body=search_body)
+        return [hit for hit in response['hits']['hits']]
+
+
+    async def get_similar_qids_async(self, query, filter_qid={}, K=50):
+        while True:
+            try:
+                results = self.search(query, K=K)
+                qid_results = [r['_id'].split("_")[0] for r in results]
+                score_results = [r['_score'] for r in results]
+                return qid_results, score_results
+            except Exception as e:
+                print(e)
+                while True:
+                    try:
+                        response = requests.get("https://www.google.com", timeout=5)
+                        if response.status_code == 200:
+                            break
+                    except Exception as e:
+                        asyncio.sleep(5)
+
+    async def batch_retrieve(self, queries_batch, K=50):
+        tasks = [
+            self.get_similar_qids_async(queries_batch.iloc[i], K=K)
+            for i in range(len(queries_batch))
+        ]
         results = await asyncio.gather(*tasks)
 
         qids, scores = zip(*results)

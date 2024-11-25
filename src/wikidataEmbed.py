@@ -275,7 +275,7 @@ class WikidataTextifier:
         else:
             raise ValueError(f"Unknown precision value {precision}")
 
-    def clean_claims_for_storage(claims):
+    def clean_claims_for_storage(self, claims):
         """
         Cleans Wikidata claims to prepare them for storage in a database.
 
@@ -285,7 +285,7 @@ class WikidataTextifier:
         Returns:
         - A dictionary with cleaned claims.
         """
-        def clean_item(self, item):
+        def clean_item(item):
             if 'datavalue' not in item['mainsnak']:
                 return {'type': item['mainsnak']['snaktype']}
             if isinstance(item['mainsnak']['datavalue']['value'], dict):

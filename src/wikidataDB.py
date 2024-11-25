@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import TypeDecorator
 import json
 
-engine = create_engine('sqlite:///../data/Wikidata/sqlite_enwiki.db',
+engine = create_engine('sqlite:///../data/Wikidata/sqlite_dewiki.db',
     pool_size=5,       # Limit the number of open connections
     max_overflow=10,   # Allow extra connections beyond pool_size
     pool_recycle=10  # Recycle connections every 10 seconds
