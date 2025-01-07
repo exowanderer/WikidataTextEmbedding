@@ -5,20 +5,20 @@ from wikidata_dumpreader import WikidataDumpReader
 from wikidataDB import WikidataID, WikidataEntity
 from multiprocessing import Manager
 import asyncio
+import os
 import gc
 
-FILEPATH = '../data/Wikidata/latest-all.json.bz2'
-BATCH_SIZE = 1000
-QUEUE_SIZE = 1500
-NUM_PROCESSES = 4
-SKIPLINES = 0
-LANGUAGE = 'en'
+FILEPATH = os.getenv("FILEPATH", '../data/Wikidata/latest-all.json.bz2')
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1000))
+QUEUE_SIZE = int(os.getenv("QUEUE_SIZE", 1500))
+NUM_PROCESSES = int(os.getenv("NUM_PROCESSES", 4))
+SKIPLINES = int(os.getenv("SKIPLINES", 0))
+LANGUAGE = os.getenv("LANGUAGE", 'en')
 
 def save_entities_to_sqlite(item, data_batch, sqlitDBlock):
     if (item is not None) and WikidataID.get_id(item['id']):
         item = WikidataEntity.normalise_item(item, language=LANGUAGE)
         data_batch.append(item)
-        del item
 
         with sqlitDBlock:
             if len(data_batch) > BATCH_SIZE:

@@ -2,10 +2,8 @@ from langchain_astradb import AstraDBVectorStore
 from langchain_core.documents import Document
 from astrapy.info import CollectionVectorServiceOptions
 from transformers import AutoTokenizer
-import torch
 import requests
-import time
-from wikidataEmbed import JinaAIEmbeddings
+from wikidataEmbed import JinaAIEmbedder
 import asyncio
 from elasticsearch import Elasticsearch
 
@@ -42,7 +40,7 @@ class AstraDBConnect:
                 namespace=ASTRA_DB_KEYSPACE,
             )
         elif model == 'jina':
-            embeddings = JinaAIEmbeddings(embedding_dim=1024)
+            embeddings = JinaAIEmbedder(embedding_dim=1024)
             self.tokenizer = embeddings.tokenizer
             self.max_token_size = 1024
 
@@ -68,7 +66,6 @@ class AstraDBConnect:
         while True:
             try:
                 self.graph_store.add_documents(self.doc_batch, ids=self.id_batch)
-                torch.cuda.empty_cache()
                 self.doc_batch = []
                 self.id_batch = []
                 break
@@ -81,15 +78,13 @@ class AstraDBConnect:
                             break
                     except Exception as e:
                         print("Waiting for internet connection...")
-                        time.sleep(5)
 
-    async def get_similar_qids_async(self, query, filter_qid={}, K=50):
+    async def get_similar_qids_async(self, query, filter={}, K=50):
         while True:
             try:
-                results = self.graph_store.similarity_search_with_relevance_scores(query, k=K, filter=filter_qid)
+                results = self.graph_store.similarity_search_with_relevance_scores(query, k=K, filter=filter)
                 qid_results = [r[0].metadata['QID'] for r in results]
                 score_results = [r[1] for r in results]
-                torch.cuda.empty_cache()
                 return qid_results, score_results
             except Exception as e:
                 print(e)
@@ -101,13 +96,17 @@ class AstraDBConnect:
                     except Exception as e:
                         asyncio.sleep(5)
 
-    async def batch_retrieve_comparative(self, queries_batch, comparative_batch, K=50):
+    async def batch_retrieve_comparative(self, queries_batch, comparative_batch, K=50, Language=None):
         qids = [[] for _ in range(len(queries_batch))]
         scores = [[] for _ in range(len(queries_batch))]
 
         for comp_col in comparative_batch.columns:
+            filter = {'QID': comparative_batch[comp_col].iloc[i]}
+            if Language is not None:
+                filter['Language'] = Language
+
             tasks = [
-                self.get_similar_qids_async(queries_batch.iloc[i], filter_qid={'QID': comparative_batch[comp_col].iloc[i]}, K=K)
+                self.get_similar_qids_async(queries_batch.iloc[i], filter=filter, K=K)
                 for i in range(len(queries_batch))
             ]
             results = await asyncio.gather(*tasks)
@@ -116,6 +115,68 @@ class AstraDBConnect:
                 qids[i] = qids[i] + temp_qid
                 scores[i] = scores[i] + temp_score
         return qids, scores
+
+    async def batch_retrieve(self, queries_batch, K=50, Language=None):
+        filter = {}
+        if Language is not None:
+            filter = {"$or": [{'Language': l} for l in Language.split(',')]}
+
+        tasks = [
+            self.get_similar_qids_async(queries_batch.iloc[i], K=K, filter=filter)
+            for i in range(len(queries_batch))
+        ]
+        results = await asyncio.gather(*tasks)
+
+        qids, scores = zip(*results)
+        return list(qids), list(scores)
+
+class WikidataCirrusSeach:
+    def __init__(self, id_filter=[]):
+        WIKIDATA_USER_AGENT = "langchain-wikidata"
+        WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
+
+        self.wikidata_mw = MediaWikiAPI(Config(user_agent=WIKIDATA_USER_AGENT, mediawiki_url=WIKIDATA_API_URL))
+        self.id_filter = id_filter
+
+    def search(self, query, K=50):
+        query = ' OR '.join(query.split())
+
+        start_n = 0
+        end_n = 1000
+        results = []
+        while True:
+            resp = self.wikidata_mw.search(query, results=end_n)
+            for r in resp[start_n:]:
+                if (len(self.id_filter) == 0) or (r in self.id_filter):
+                    results.append(r)
+
+                if len(results) >= K:
+                    break
+
+            if (len(results) >= K) or (len(resp) < end_n) or (self.end_n >= 10000):
+                break
+
+            start_n += 1000
+            end_n += 1000
+
+        return results
+
+    async def get_similar_qids_async(self, query, filter_qid={}, K=50):
+        while True:
+            try:
+                results = self.search(query, K=K)
+                qid_results = results
+                score_results = [1]*len(results)
+                return qid_results, score_results
+            except Exception as e:
+                print(e)
+                while True:
+                    try:
+                        response = requests.get("https://www.google.com", timeout=5)
+                        if response.status_code == 200:
+                            break
+                    except Exception as e:
+                        asyncio.sleep(5)
 
     async def batch_retrieve(self, queries_batch, K=50):
         tasks = [
@@ -176,23 +237,11 @@ class WikidataKeywordSearch:
         response = self.es.search(index=self.index_name, body=search_body)
         return [hit for hit in response['hits']['hits']]
 
-
     async def get_similar_qids_async(self, query, filter_qid={}, K=50):
-        while True:
-            try:
-                results = self.search(query, K=K)
-                qid_results = [r['_id'].split("_")[0] for r in results]
-                score_results = [r['_score'] for r in results]
-                return qid_results, score_results
-            except Exception as e:
-                print(e)
-                while True:
-                    try:
-                        response = requests.get("https://www.google.com", timeout=5)
-                        if response.status_code == 200:
-                            break
-                    except Exception as e:
-                        asyncio.sleep(5)
+        results = self.search(query, K=K)
+        qid_results = [r['_id'].split("_")[0] for r in results]
+        score_results = [r['_score'] for r in results]
+        return qid_results, score_results
 
     async def batch_retrieve(self, queries_batch, K=50):
         tasks = [

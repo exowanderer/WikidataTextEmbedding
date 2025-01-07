@@ -3,8 +3,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import TypeDecorator
 import json
+import os
 
-engine = create_engine('sqlite:///../data/Wikidata/sqlite_dewiki.db',
+LANGUAGE = os.getenv("LANGUAGE", 'en')
+engine = create_engine(f'sqlite:///../data/Wikidata/sqlite_{LANGUAGE}wiki.db',
     pool_size=5,       # Limit the number of open connections
     max_overflow=10,   # Allow extra connections beyond pool_size
     pool_recycle=10  # Recycle connections every 10 seconds
@@ -208,6 +210,33 @@ class WikidataEntity(Base):
         if 'mul' in item['aliases']:
             aliases = aliases | set([x['value'] for x in item['aliases']['mul']])
         return list(aliases)
+
+    @staticmethod
+    def clean_claims_for_storage(claims):
+        """
+        Cleans Wikidata claims to prepare them for storage in a database.
+
+        Parameters:
+        - claims: A dictionary where each key is a property ID (pid) and each value is a list of claim statements related to the property.
+
+        Returns:
+        - A dictionary with cleaned claims.
+        """
+        def clean_item(item):
+            if 'datavalue' not in item['mainsnak']:
+                return {'type': item['mainsnak']['snaktype']}
+            if isinstance(item['mainsnak']['datavalue']['value'], dict):
+                value = {'type': item['mainsnak']['datavalue']['type'], **item['mainsnak']['datavalue']['value']}
+                if 'entity-type' in value:
+                    del value['entity-type']
+                return value
+            return {'type': item['mainsnak']['datavalue']['type'], 'value': item['mainsnak']['datavalue']['value']}
+
+        cleaned_claims = {
+            pid: [clean_item(item) for item in value]
+            for pid, value in claims.items()
+        }
+        return cleaned_claims
 
 
 class WikidataID(Base):

@@ -10,8 +10,7 @@ import os
 import pickle
 import asyncio
 
-NVIDIA = os.getenv("NVIDIA", "false").lower() == "true"
-JINA = os.getenv("JINA", "false").lower() == "true"
+MODEL = os.getenv("MODEL", "jina")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 100))
 API_KEY_FILENAME = os.getenv("API_KEY", None)
 EVALUATION_PATH = os.getenv("EVALUATION_PATH")
@@ -21,12 +20,16 @@ K = int(os.getenv("K", 50))
 COMPARATIVE = os.getenv("COMPARATIVE", "false").lower() == "true"
 COMPARATIVE_COLS = os.getenv("COMPARATIVE_COLS")
 QUERY_COL = os.getenv("QUERY_COL")
-LANGUAGE = os.getenv("LANGUAGE", 'en')
+QUERY_LANGUAGE = os.getenv("QUERY_LANGUAGE", 'en')
+DB_LANGUAGE = os.getenv("DB_LANGUAGE", None)
 RESTART = os.getenv("RESTART", "false").lower() == "true"
 ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+PREFIX = os.getenv("PREFIX", "")
 
-OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-{COLLECTION_NAME}-{LANGUAGE}"
+OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-{COLLECTION_NAME}-DB({DB_LANGUAGE})-Query({QUERY_LANGUAGE})"
 # OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-keyword-search-{LANGUAGE}"
+if PREFIX != "":
+    OUTPUT_FILENAME += PREFIX
 
 # Load the Database
 if not COLLECTION_NAME:
@@ -36,7 +39,7 @@ if not API_KEY_FILENAME:
     API_KEY_FILENAME = os.listdir("../API_tokens")[0]
 datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
 
-graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model='nvidia' if NVIDIA else 'jina', batch_size=BATCH_SIZE)
+graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=BATCH_SIZE)
 # graph_store = WikidataKeywordSearch(ELASTICSEARCH_URL)
 
 #Load the Evaluation Dataset
@@ -52,7 +55,7 @@ else:
     eval_data = pickle.load(open(f"../data/Evaluation Data/{EVALUATION_PATH}", "rb"))
 
 if 'Language' in eval_data.columns:
-    eval_data = eval_data[eval_data['Language'] == LANGUAGE]
+    eval_data = eval_data[eval_data['Language'] == QUERY_LANGUAGE]
 
 if __name__ == "__main__":
     with tqdm(total=len(eval_data), disable=False) as progressbar:
@@ -68,9 +71,9 @@ if __name__ == "__main__":
             batch = eval_data.loc[batch_idx]
 
             if COMPARATIVE:
-                batch_results = asyncio.run(graph_store.batch_retrieve_comparative(batch[QUERY_COL], batch[COMPARATIVE_COLS.split(',')], K=K))
+                batch_results = asyncio.run(graph_store.batch_retrieve_comparative(batch[QUERY_COL], batch[COMPARATIVE_COLS.split(',')], K=K, Language=DB_LANGUAGE))
             else:
-                batch_results = asyncio.run(graph_store.batch_retrieve(batch[QUERY_COL], K=K))
+                batch_results = asyncio.run(graph_store.batch_retrieve(batch[QUERY_COL], K=K, Language=DB_LANGUAGE))
 
             eval_data.loc[batch_idx, 'Retrieval QIDs'] = pd.Series(batch_results[0]).values
             eval_data.loc[batch_idx, 'Retrieval Score'] = pd.Series(batch_results[1]).values

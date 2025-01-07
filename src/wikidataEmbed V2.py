@@ -9,20 +9,16 @@ from datetime import date, datetime
 import re
 
 class WikidataTextifier:
-    def __init__(self, with_claim_desc=False, with_claim_aliases=False, with_property_desc=False, with_property_aliases=False, language='en'):
+    def __init__(self, with_claim_desc=False, with_claim_aliases=False, language='en'):
         """
         Initializes the WikidataTextifier with options to include descriptions and aliases for both entities and properties.
 
         Parameters:
         - with_claim_desc: Whether to include the descriptions of entities in claims in the output text.
         - with_claim_aliases: Whether to include the aliases of entities in claims in the output text.
-        - with_property_desc: Whether to include the descriptions of claim properties in the output text.
-        - with_property_aliases: Whether to include the aliases of claim properties in the output text.
         """
         self.with_claim_desc = with_claim_desc
         self.with_claim_aliases = with_claim_aliases
-        self.with_property_desc = with_property_desc
-        self.with_property_aliases = with_property_aliases
 
         self.language = language
         self.lang_values = {
@@ -40,13 +36,7 @@ class WikidataTextifier:
                 'tens of millions of years': 'tens of millions of years',
                 'hundred million years': 'hundred million years',
                 'billion years': 'billion years',
-                'novalue': 'no value',
-                ',': ',',
-                'l"': "\"",
-                'r"': "\"",
-                "(": "(",
-                ")": ")",
-                ";": ";"
+                'novalue': 'no value'
             },
             'de': {
                 'months': ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
@@ -62,13 +52,7 @@ class WikidataTextifier:
                 'tens of millions of years': 'Zehn Millionen Jahre',
                 'hundred million years': 'Hundert Millionen Jahre',
                 'billion years': 'Milliarden Jahre',
-                'novalue': 'no Wert',
-                ',': ',',
-                'l"': "„",
-                'r"': "“",
-                "(": "(",
-                ")": ")",
-                ";": ";"
+                'novalue': 'no Wert'
             },
             'ar': {
                 'months': ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'],
@@ -84,17 +68,10 @@ class WikidataTextifier:
                 'tens of millions of years': 'عشرات الملايين من السنين',
                 'hundred million years': 'مئات الملايين من السنين',
                 'billion years': 'مليار سنة',
-                'novalue': 'لا قيمة',
-                ',': '،',
-                'l"': "«",
-                'r"': "»",
-                "(": "(",
-                ")": ")",
-                ";": "؛"
+                'novalue': 'لا قيمة'
             }
         }
         assert (self.language in self.lang_values), 'Language not found for time parser'
-        self.lang = self.lang_values[self.language]
 
     def merge_entity_property_text(self, entity_description, properties):
         """
@@ -109,24 +86,14 @@ class WikidataTextifier:
         """
         if len(properties) > 0:
             if self.language == 'de':
-                entity_text = f"{entity_description}. Attribute umfassen: {''.join(properties)}"
+                entity_text = f"{entity_description},\n \"Attribute\": [{',\n '.join(properties)}]"
             elif self.language == 'ar':
-                entity_text = f"{entity_description}. السمات تتضمن: {''.join(properties)}"
+                entity_text = f"{entity_description},\n \"السمات\": [{',\n '.join(properties)}]"
             else:
-                entity_text = f"{entity_description}. Attributes include: {''.join(properties)}"
+                entity_text = f"{entity_description},\n \"Attributes\": [{',\n '.join(properties)}]"
         else:
-            entity_text = f"{entity_description}."
-        return entity_text
-
-    def aliases_to_text(self, aliases):
-        if len(aliases) == 0:
-            return ""
-
-        if self.language == 'de':
-            return f", auch bekannt als {', '.join(aliases)}"
-        elif self.language == 'ar':
-            return f"، المعروف أيضًا باسم {'، '.join(aliases)}"
-        return f", also known as {', '.join(aliases)}"
+            entity_text = f"{entity_description}"
+        return "{" + entity_text + "}"
 
     def entity_to_text(self, entity, as_list=False):
         """
@@ -144,7 +111,12 @@ class WikidataTextifier:
         """
         properties = self.properties_to_text(entity.claims)
 
-        entity_description = f"{entity.label}{self.lang[',']} {entity.description}"
+        if self.language == 'de':
+            entity_description = f'"Bezeichnung": "{entity.label}",\n "Beschreibung": "{entity.description}"'
+        elif self.language == 'ar':
+            entity_description = f'"التسمية": "{entity.label}",\n "الوصف": "{entity.description}"'
+        else:
+            entity_description = f'"Label": "{entity.label}",\n "Description": "{entity.description}"'
 
         if len(entity.aliases) > 0:
             entity_description += self.aliases_to_text(entity.aliases)
@@ -181,29 +153,35 @@ class WikidataTextifier:
                             rank_preferred_found = True
                             p_data = []
 
-                        if len(qualifiers) > 0:
-                            value += f" {self.lang['(']}{qualifiers}{self.lang[')']}"
+                        if len(qualifiers) > 3:
+                            if self.language == 'de':
+                                value = f'"Wert": {value},\n "Qualifizierer": {qualifiers}'
+                            elif self.language == 'ar':
+                                value = f'"القيمة": {value},\n "المحددات": {qualifiers}'
+                            else:
+                                value = f'"Value": {value},\n "Qualifiers": {qualifiers}'
+                            value = "{"+ value +"}"
                         p_data.append(value)
 
             if len(p_data) > 0:
                 property = WikidataEntity.get_entity(pid)
                 if property:
-                    text = f"\n- {property.label}"
-                    if self.with_property_desc:
-                        text += f"{self.lang[',']} {property.description}"
-
-                    if self.with_property_aliases and (len(property.aliases) > 0):
-                        text += self.aliases_to_text(property.aliases)
+                    text = f"\"{property.label}\""
 
                     if len(p_data) > 1:
-                        p_data_text = self.lang['r\"'] + self.lang[','] + " \n " + self.lang['l\"']
-                        p_data_text = p_data_text.join(p_data)
+                        p_data_text = "[" + (',\n '.join(p_data)) + "]"
                     else:
                         p_data_text = p_data[0]
-
-                    text += ": " + self.lang['l"'] + p_data_text + self.lang['r"']
+                    text += f': "{p_data_text}"'
                     properties_text.append(text)
         return properties_text
+
+    def aliases_to_text(self, aliases):
+        if self.language == 'de':
+            return f",\n \"Aliasnamen\": [\"{'\", \"'.join(aliases)}\"]"
+        elif self.language == 'ar':
+            return f",\n \"أسماء أخرى\": [\"{'\", \"'.join(aliases)}\"]"
+        return f",\n \"Aliases\": [\"{'\", \"'.join(aliases)}\"]"
 
     def mainsnak_to_value(self, mainsnak):
         """
@@ -224,36 +202,50 @@ class WikidataTextifier:
                 if entity is None:
                     return None
 
-                text = entity.label
-                if self.with_claim_desc:
-                    text += f"{self.lang[',']} {entity.description}"
+                text = '"'+entity.label+'"'
+                if self.with_claim_desc or self.with_claim_aliases:
+                    if self.language == 'de':
+                        text = f'"Bezeichnung": {entity.label}'
+                    elif self.language == 'ar':
+                        text = f'"التسمية": {entity.label}'
+                    else:
+                        text = f'"Label": {entity.label}'
 
-                if self.with_claim_aliases and len(entity.aliases) > 0:
-                    text += self.aliases_to_text(entity.aliases)
+                    if self.with_claim_desc:
+                        if self.language == 'de':
+                            text += f',\n "Beschreibung": "{entity.description}"'
+                        elif self.language == 'ar':
+                            text += f',\n "الوصف": "{entity.description}"'
+                        else:
+                            text += f',\n "Description": "{entity.description}"'
+
+                    if self.with_claim_aliases and len(entity.aliases) > 0:
+                        text += self.aliases_to_text(entity.aliases)
+                    text = "{" + text + "}"
                 return text
 
             elif mainsnak.get('datatype', '') == 'monolingualtext':
-                return mainsnak['datavalue']['value']['text']
+                return '"'+mainsnak['datavalue']['value']['text']+'"'
 
             elif mainsnak.get('datatype', '') == 'string':
-                return mainsnak['datavalue']['value']
+                return '"'+mainsnak['datavalue']['value']+'"'
 
             elif mainsnak.get('datatype', '') == 'time':
                 try:
-                    return self.time_to_text(mainsnak['datavalue']['value'])
+                    return '"'+self.time_to_text(mainsnak['datavalue']['value'])+'"'
                 except Exception as e:
                     print(e)
-                    return mainsnak['datavalue']['value']["time"]
+                    return '"'+mainsnak['datavalue']['value']["time"]+'"'
 
             elif mainsnak.get('datatype', '') == 'quantity':
                 try:
-                    return self.quantity_to_text(mainsnak['datavalue']['value'])
+                    return '"'+self.quantity_to_text(mainsnak['datavalue']['value'])+'"'
                 except Exception as e:
                     print(e)
-                    return mainsnak['datavalue']['value']['amount']
+                    return '"'+mainsnak['datavalue']['value']['amount']+'"'
 
         elif mainsnak.get('snaktype', '') == 'novalue':
-            return self.lang_values[self.language]['novalue']
+            return '"'+self.lang_values[self.language]['novalue']+'"'
 
         return None
 
@@ -281,10 +273,9 @@ class WikidataTextifier:
                 property = WikidataEntity.get_entity(pid)
                 if property:
                     if len(text) > 0:
-                        text += f" {self.lang[';']} "
-                    q_data_text = f"{self.lang[',']} ".join(q_data)
-                    text += f"{property.label}: {q_data_text}"
-        return text
+                        text += ',\n '
+                    text += f"\"{property.label}\": [\"{'\", \"'.join(q_data)}\"]"
+        return "{"+ text +"}"
 
     def quantity_to_text(self, quantity_data):
         """

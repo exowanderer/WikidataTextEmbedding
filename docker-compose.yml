@@ -10,6 +10,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LANGUAGE: "de"
+      OFFSET: 0
 
   data_processing_save_entities:
     build:
@@ -28,6 +29,7 @@ services:
       dockerfile: ./docker/3_Add_Wikidata_to_AstraDB/Dockerfile
     volumes:
       - ./data:/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
     tty: true
     container_name: add_wikidata_to_astra
     deploy:
@@ -39,12 +41,14 @@ services:
               capabilities: [gpu]
     environment:
       PYTHONUNBUFFERED: 1
-      NVIDIA: "true"
-      SAMPLE: "false"
+      MODEL: "jina"
+      SAMPLE: "true"
       API_KEY: "datastax_wikidata_nvidia.json"
-      BATCH_SIZE: 200
-      OFFSET: 9160000
-      COLLECTION_NAME: "qids_nvidia"
+      EMBED_BATCH_SIZE: 8
+      QUERY_BATCH_SIZE: 1000
+      OFFSET: 2560000
+      COLLECTION_NAME: "wikidata_test_v1"
+      LANGUAGE: 'ar'
 
   run_retrieval:
     build:
@@ -52,6 +56,7 @@ services:
       dockerfile: ./docker/4_Run_Retrieval/Dockerfile
     volumes:
       - ./data:/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
     tty: true
     container_name: run_retrieval
     deploy:
@@ -64,14 +69,42 @@ services:
 
     environment:
       PYTHONUNBUFFERED: 1
-      JINA: "true"
+      MODEL: "jina"
       API_KEY: "datastax_wikidata_nvidia.json"
-      COLLECTION_NAME: "wikidata_test_v1"
-      BATCH_SIZE: 8
-      EVALUATION_PATH: "LC_QuAD/processed_dataframe.pkl"
+      COLLECTION_NAME: "wikidata_langtest"
+      BATCH_SIZE: 16
+      EVALUATION_PATH: "Mintaka/processed_dataframe_langtest.pkl"
       # COMPARATIVE: "true"
       # COMPARATIVE_COLS: "Correct QID,Wrong QID"
       QUERY_COL: "Question"
-      LANGUAGE: "en"
+      QUERY_LANGUAGE: "de"
+      DB_LANGUAGE: "de"
+      PREFIX: ""
       ELASTICSEARCH_URL: "http://localhost:9200"
+    network_mode: "host"
+
+  run_rerank:
+    build:
+      context: .
+      dockerfile: ./docker/5_Run_Rerank/Dockerfile
+    volumes:
+      - ./data:/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    tty: true
+    container_name: run_rank
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    environment:
+      PYTHONUNBUFFERED: 1
+      MODEL: "jina"
+      RETRIEVAL_FILENAME: "retrieval_results_Mintaka-wikidata_test_v1-en"
+      BATCH_SIZE: 1
+      QUERY_COL: "Question"
+      LANGUAGE: "de"
     network_mode: "host"
