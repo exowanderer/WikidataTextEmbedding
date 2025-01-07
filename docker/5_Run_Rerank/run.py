@@ -2,7 +2,8 @@ import sys
 sys.path.append('../src')
 
 from wikidataDB import WikidataEntity
-from wikidataEmbed import WikidataTextifier, JinaAIReranker
+from wikidataEmbed import WikidataTextifier
+from JinaAI import JinaAIReranker
 
 from tqdm import tqdm
 import pandas as pd

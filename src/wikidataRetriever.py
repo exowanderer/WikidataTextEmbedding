@@ -3,7 +3,7 @@ from langchain_core.documents import Document
 from astrapy.info import CollectionVectorServiceOptions
 from transformers import AutoTokenizer
 import requests
-from wikidataEmbed import JinaAIEmbedder
+from JinaAI import JinaAIEmbedder
 import asyncio
 from elasticsearch import Elasticsearch
 
