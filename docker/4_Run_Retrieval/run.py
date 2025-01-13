@@ -49,7 +49,7 @@ if not EVALUATION_PATH:
     raise ValueError("The EVALUATION_PATH environment variable is required")
 
 if not RESTART and os.path.exists(f"../data/Evaluation Data/{OUTPUT_FILENAME}.pkl"):
-    print("Loading data...")
+    print(f"Loading data from: {OUTPUT_FILENAME}")
     eval_data = pickle.load(open(f"../data/Evaluation Data/{OUTPUT_FILENAME}.pkl", "rb"))
 else:
     eval_data = pickle.load(open(f"../data/Evaluation Data/{EVALUATION_PATH}", "rb"))
@@ -58,6 +58,8 @@ if 'Language' in eval_data.columns:
     eval_data = eval_data[eval_data['Language'] == QUERY_LANGUAGE]
 
 if __name__ == "__main__":
+    print(f"Running: {OUTPUT_FILENAME}")
+
     with tqdm(total=len(eval_data), disable=False) as progressbar:
         if 'Retrieval QIDs' not in eval_data:
             eval_data['Retrieval QIDs'] = None
