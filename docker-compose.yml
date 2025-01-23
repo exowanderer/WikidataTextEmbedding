@@ -71,15 +71,15 @@ services:
       PYTHONUNBUFFERED: 1
       MODEL: "jina"
       API_KEY: "datastax_wikidata_nvidia.json"
-      COLLECTION_NAME: "wikidata_langtest"
-      BATCH_SIZE: 16
-      EVALUATION_PATH: "REDFM/processed_dataframe_langtest.pkl"
+      COLLECTION_NAME: "wikidata_test_v1"
+      BATCH_SIZE: 100
+      EVALUATION_PATH: "Mintaka/processed_dataframe_langtest.pkl"
       # COMPARATIVE: "true"
       # COMPARATIVE_COLS: "Correct QID,Wrong QID"
-      QUERY_COL: "Sentence no entity"
+      QUERY_COL: "Question"
       # QUERY_LANGUAGE: "ar"
       # DB_LANGUAGE: "en,ar"
-      PREFIX: "_noentity"
+      PREFIX: ""
       ELASTICSEARCH_URL: "http://localhost:9200"
     network_mode: "host"
 

@@ -8,7 +8,6 @@ from tqdm import tqdm
 import pandas as pd
 import os
 import pickle
-import asyncio
 
 MODEL = os.getenv("MODEL", "jina")
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 100))
@@ -39,7 +38,7 @@ if not API_KEY_FILENAME:
     API_KEY_FILENAME = os.listdir("../API_tokens")[0]
 datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
 
-graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=BATCH_SIZE)
+graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=BATCH_SIZE, cache_embeddings=True)
 # graph_store = WikidataKeywordSearch(ELASTICSEARCH_URL)
 
 #Load the Evaluation Dataset
@@ -66,16 +65,17 @@ if __name__ == "__main__":
         if 'Retrieval Score' not in eval_data:
             eval_data['Retrieval Score'] = None
 
-        row_to_process = pd.isna(eval_data['Retrieval QIDs']) | pd.isna(eval_data['Retrieval Score'])
+        row_to_process = eval_data['Retrieval QIDs'].apply(lambda x: (x is None) or (len(x) == 0)) | eval_data['Retrieval Score'].apply(lambda x: (x is None) or (len(x) == 0)) # Find rows that havn't been processed
+
         progressbar.update((~row_to_process).sum())
         for i in range(0, row_to_process.sum(), BATCH_SIZE):
             batch_idx = eval_data[row_to_process].iloc[i:i+BATCH_SIZE].index
             batch = eval_data.loc[batch_idx]
 
             if COMPARATIVE:
-                batch_results = asyncio.run(graph_store.batch_retrieve_comparative(batch[QUERY_COL], batch[COMPARATIVE_COLS.split(',')], K=K, Language=DB_LANGUAGE))
+                batch_results = graph_store.batch_retrieve_comparative(batch[QUERY_COL], batch[COMPARATIVE_COLS.split(',')], K=K, Language=DB_LANGUAGE)
             else:
-                batch_results = asyncio.run(graph_store.batch_retrieve(batch[QUERY_COL], K=K, Language=DB_LANGUAGE))
+                batch_results = graph_store.batch_retrieve(batch[QUERY_COL], K=K, Language=DB_LANGUAGE)
 
             eval_data.loc[batch_idx, 'Retrieval QIDs'] = pd.Series(batch_results[0]).values
             eval_data.loc[batch_idx, 'Retrieval Score'] = pd.Series(batch_results[1]).values

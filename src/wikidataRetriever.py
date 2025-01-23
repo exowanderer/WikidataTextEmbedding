@@ -4,15 +4,14 @@ from astrapy.info import CollectionVectorServiceOptions
 from transformers import AutoTokenizer
 import requests
 from JinaAI import JinaAIEmbedder
-import asyncio
+import time
 from elasticsearch import Elasticsearch
 
 from mediawikiapi import MediaWikiAPI
 from mediawikiapi.config import Config
 
 class AstraDBConnect:
-    def __init__(self, datastax_token, collection_name, model='nvidia', batch_size=8):
-        ASTRA_DB_DATABASE_ID = datastax_token['ASTRA_DB_DATABASE_ID']
+    def __init__(self, datastax_token, collection_name, model='nvidia', batch_size=8, cache_embeddings=False):
         ASTRA_DB_APPLICATION_TOKEN = datastax_token['ASTRA_DB_APPLICATION_TOKEN']
         ASTRA_DB_API_ENDPOINT = datastax_token["ASTRA_DB_API_ENDPOINT"]
         ASTRA_DB_KEYSPACE = datastax_token["ASTRA_DB_KEYSPACE"]
@@ -40,7 +39,7 @@ class AstraDBConnect:
                 namespace=ASTRA_DB_KEYSPACE,
             )
         elif model == 'jina':
-            embeddings = JinaAIEmbedder(embedding_dim=1024)
+            embeddings = JinaAIEmbedder(embedding_dim=1024, cache=cache_embeddings)
             self.tokenizer = embeddings.tokenizer
             self.max_token_size = 1024
 
@@ -79,7 +78,7 @@ class AstraDBConnect:
                     except Exception as e:
                         print("Waiting for internet connection...")
 
-    async def get_similar_qids_async(self, query, filter={}, K=50):
+    def get_similar_qids(self, query, filter={}, K=50):
         while True:
             try:
                 results = self.graph_store.similarity_search_with_relevance_scores(query, k=K, filter=filter)
@@ -94,38 +93,36 @@ class AstraDBConnect:
                         if response.status_code == 200:
                             break
                     except Exception as e:
-                        asyncio.sleep(5)
+                        time.sleep(5)
 
-    async def batch_retrieve_comparative(self, queries_batch, comparative_batch, K=50, Language=None):
+    def batch_retrieve_comparative(self, queries_batch, comparative_batch, K=50, Language=None):
         qids = [[] for _ in range(len(queries_batch))]
         scores = [[] for _ in range(len(queries_batch))]
 
         for comp_col in comparative_batch.columns:
             filter = {'QID': comparative_batch[comp_col].iloc[i]}
-            if Language is not None:
-                filter['Language'] = Language
+            if (Language is not None) and (Language != ""):
+                    filter['Language'] = Language
 
-            tasks = [
-                self.get_similar_qids_async(queries_batch.iloc[i], filter=filter, K=K)
+            results = [
+                self.get_similar_qids(queries_batch.iloc[i], filter=filter, K=K)
                 for i in range(len(queries_batch))
             ]
-            results = await asyncio.gather(*tasks)
 
             for i, (temp_qid, temp_score) in enumerate(results):
                 qids[i] = qids[i] + temp_qid
                 scores[i] = scores[i] + temp_score
         return qids, scores
 
-    async def batch_retrieve(self, queries_batch, K=50, Language=None):
+    def batch_retrieve(self, queries_batch, K=50, Language=None):
         filter = {}
-        if Language is not None:
+        if (Language is not None) and (Language != ""):
             filter = {"$or": [{'Language': l} for l in Language.split(',')]}
 
-        tasks = [
-            self.get_similar_qids_async(queries_batch.iloc[i], K=K, filter=filter)
+        results = [
+            self.get_similar_qids(queries_batch.iloc[i], K=K, filter=filter)
             for i in range(len(queries_batch))
         ]
-        results = await asyncio.gather(*tasks)
 
         qids, scores = zip(*results)
         return list(qids), list(scores)
@@ -161,7 +158,7 @@ class WikidataCirrusSeach:
 
         return results
 
-    async def get_similar_qids_async(self, query, filter_qid={}, K=50):
+    def get_similar_qids(self, query, filter_qid={}, K=50):
         while True:
             try:
                 results = self.search(query, K=K)
@@ -176,14 +173,13 @@ class WikidataCirrusSeach:
                         if response.status_code == 200:
                             break
                     except Exception as e:
-                        asyncio.sleep(5)
+                        time.sleep(5)
 
-    async def batch_retrieve(self, queries_batch, K=50):
-        tasks = [
-            self.get_similar_qids_async(queries_batch.iloc[i], K=K)
+    def batch_retrieve(self, queries_batch, K=50):
+        results = [
+            self.get_similar_qids(queries_batch.iloc[i], K=K)
             for i in range(len(queries_batch))
         ]
-        results = await asyncio.gather(*tasks)
 
         qids, scores = zip(*results)
         return list(qids), list(scores)
@@ -237,18 +233,17 @@ class WikidataKeywordSearch:
         response = self.es.search(index=self.index_name, body=search_body)
         return [hit for hit in response['hits']['hits']]
 
-    async def get_similar_qids_async(self, query, filter_qid={}, K=50):
+    def get_similar_qids(self, query, filter_qid={}, K=50):
         results = self.search(query, K=K)
         qid_results = [r['_id'].split("_")[0] for r in results]
         score_results = [r['_score'] for r in results]
         return qid_results, score_results
 
-    async def batch_retrieve(self, queries_batch, K=50):
-        tasks = [
-            self.get_similar_qids_async(queries_batch.iloc[i], K=K)
+    def batch_retrieve(self, queries_batch, K=50):
+        results = [
+            self.get_similar_qids(queries_batch.iloc[i], K=K)
             for i in range(len(queries_batch))
         ]
-        results = await asyncio.gather(*tasks)
 
         qids, scores = zip(*results)
         return list(qids), list(scores)

@@ -31,7 +31,7 @@ if not API_KEY_FILENAME:
 datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
 
 textifier = WikidataTextifier(with_claim_aliases=False, with_property_aliases=False, language=LANGUAGE)
-graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=EMBED_BATCH_SIZE)
+graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=EMBED_BATCH_SIZE, cache_embeddings=False)
 
 # Load the Sample IDs
 sample_ids = None

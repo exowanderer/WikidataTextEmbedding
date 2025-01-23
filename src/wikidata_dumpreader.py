@@ -1,219 +1,220 @@
 import gzip
 import bz2
 import orjson
-import asyncio
 import time
 import psutil
 from tqdm import tqdm
-from multiprocessing import Queue, Value
+from multiprocessing import Process, Queue, Value
 
 class WikidataDumpReader:
-    def __init__(self, file_path, num_processes=4, batch_size=1000, queue_size=1000, skiplines=0):
+    def __init__(self, file_path, num_processes=4, queue_size=1000, skiplines=0):
         """
-        Initializes the reader with the file path, number of processes for multiprocessing,
-        and batch size for reading lines.
+        Initializes the reader with the file path, number of processes, queue size, and number of lines to skip.
 
         Parameters:
-        - file_path: Path to the dump file.
-        - num_processes: Number of processes to use for multiprocessing (default is 4).
-        - batch_size: Number of lines to read in each batch (default is 1000).
-        - queue_size: Maximum size of the queue (default is 10000).
-        - skiplines: Number of lines to skip at the beginning of the file (default is 0).
+        - file_path (str): Path to the dump file.
+        - num_processes (int): Number of consumer processes to spawn (default=4).
+        - queue_size (int): Maximum size of the queue (default=1000).
+        - skiplines (int): Number of lines to skip at the beginning of the file (default=0).
         """
         self.file_path = file_path
         self.extension = file_path.split(".")[-1]
         self.num_processes = num_processes
-        self.batch_size = batch_size
         self.skiplines = skiplines
+
+        # This queue is shared across all processes
         self.queue = Queue(maxsize=queue_size)
 
-        self.finished = Value('i', False)
+        # Shared multiprocessing values:
+        # - finished: 0 => not finished, 1 => finished
+        # - iterations: a counter for how many entities have been processed
+        self.finished = Value('i', 0)
         self.iterations = Value('i', 0)
 
-    def lines_to_entities(self, lines):
+    def line_to_entity(self, line):
         """
-        Converts a single line of text into a Wikidata entity.
+        Converts a single line of text into a Wikidata entity (a dictionary).
 
         Parameters:
-        - lines: A string of text containing multiple lines representing Wikidata entities.
+        - line (str): A single line representing a Wikidata entity in JSON format.
 
         Returns:
-        - A list of dictionaries representing the Wikidata entities.
+        - dict or None: The parsed entity if valid JSON, or None if empty or malformed.
         """
-        lines = lines.strip()
-        if lines[-1] == ",":
-            lines = lines[:-1]
-        if lines[0] != "[":
-            lines = '[' + lines
-        if lines[-1] != "]":
-            lines = lines + ']'
+        line = line.strip("[] ,\n")
+        if not line:
+            return None
 
-        entities = None
         try:
-            entities = orjson.loads(lines)
+            entity = orjson.loads(line)
+            return entity
         except ValueError as e:
-            print("Failed to parse JSON", e)
-            raise e
+            # You can either log and continue or re-raise
+            print("Failed to parse JSON:", e)
+            return None
 
-        return entities
-
-    async def run(self, handler_func, max_iterations=None, verbose=True):
+    def run(self, handler_func, max_iterations=None, verbose=True):
         """
-        Asynchronously processes the input file. It reads the file in batches, converts lines
-        to entities, and applies a handler function to each entity using a producer-consumer model.
+        Starts processing using a producer-consumer model with multiprocessing.
+
+        Spawns:
+          - 1 Producer process (reads lines from file, pushes to queue).
+          - N Consumer processes (parse lines, call handler_func).
+          - 1 Reporter process (optional) that prints stats periodically.
 
         Parameters:
-        - handler_func: A function to handle/process each entity.
-        - max_iterations: Maximum number of iterations for processing (default is None).
-        - verbose: If True, prints processing stats (default is True).
+        - handler_func (callable): A function that takes a parsed entity (dict) as input.
+        - max_iterations (int or None): Stop after this many lines (if not None).
+        - verbose (bool): If True, spawns a reporter process to print stats.
         """
-        producer = asyncio.to_thread(self._producer, max_iterations)
-        consumers = [
-            asyncio.to_thread(self._consumer, handler_func) for _ in range(self.num_processes)
+        # Create processes
+        producer_p = Process(target=self._producer, args=(max_iterations,))
+        consumer_ps = [
+            Process(target=self._consumer, args=(handler_func,))
+            for _ in range(self.num_processes)
         ]
 
-        tasks = [producer, *consumers]
+        # Optional reporter
+        reporter_p = None
         if verbose:
-            reporter = asyncio.to_thread(self._reporter)
-            tasks.append(reporter)
+            reporter_p = Process(target=self._reporter, args=([producer_p] + consumer_ps,))
 
-        await asyncio.gather(*tasks)
+        # Start processes
+        producer_p.start()
+        for cp in consumer_ps:
+            cp.start()
+        if reporter_p:
+            reporter_p.start()
+
+        # Wait for processes to finish
+        producer_p.join()
+        for cp in consumer_ps:
+            cp.join()
+        if reporter_p:
+            reporter_p.join()
 
     def _reporter(self):
         """
-        Reports the progress of the processing, including lines processed per second
-        and memory usage.
+        Runs in its own process: reports overall progress and total memory usage every few seconds
+        until the producer has finished and the queue is empty.
 
-        Outputs:
-        - Prints progress and memory usage statistics.
+        Parameters
+        ----------
+        processes : list of multiprocessing.Process
+            The list of processes (producer + consumers + possibly others) to track.
         """
-        start = time.time()
-        while (not self.finished.value) or (not self.queue.empty()):
+
+        start_time = time.time()
+
+        while True:
             time.sleep(3)
 
-            time_per_iteration_s = time.time() - start
-            lines_per_s = self.iterations.value / time_per_iteration_s
+            # Grab iteration count
+            with self.iterations.get_lock():
+                items_processed = self.iterations.value
 
-            process = psutil.Process()
-            memory_info = process.memory_info()
-            memory_usage_mb = memory_info.rss / 1024 ** 2
+            # If finished and queue empty, exit
+            if self.finished.value == 1 and self.queue.empty():
+                break
 
-            print(f"Items Processes: {self.iterations.value} \t Line Process Avg: {lines_per_s:.0f} items/sec \t Memory Usage Avg: {memory_usage_mb:.2f} MB")
+            elapsed = time.time() - start_time
+            rate = items_processed / elapsed if elapsed > 0 else 0.0
+
+            print(
+                f"Items Processed: {items_processed} | "
+                f"Processing Rate: {rate:.0f} items/sec"
+            )
+
 
     def _producer(self, max_iterations):
         """
-        Reads lines from the file in batches and pushes individual entities into the queue.
-
-        Parameters:
-        - max_iterations: Maximum number of iterations for reading lines (default is None).
+        Reads lines from the file (plain or compressed) and puts them into the queue.
+        Once done (or max_iterations reached), marks 'finished' as 1.
         """
         with self.finished.get_lock():
-            self.finished.value = False
+            self.finished.value = 0  # not finished
 
         iters = 0
         if self.extension == 'json':
-            read_lines = self._read_jsonfile()
+            lines_gen = self._read_jsonfile()
         elif self.extension in ['gz', 'bz2']:
-            read_lines = self._read_zipfile()
+            lines_gen = self._read_zipfile()
         else:
-            raise ValueError("File extension is not supported")
+            raise ValueError(f"File extension '{self.extension}' is not supported")
 
-        for lines_batch in read_lines:
-            self.queue.put(lines_batch)
-
+        for line in lines_gen:
+            self.queue.put(line)  # Blocks if the queue is full
             iters += 1
-            if max_iterations and (iters >= max_iterations):
+            if max_iterations and iters >= max_iterations:
                 break
 
+        # Mark as finished
         with self.finished.get_lock():
-            self.finished.value = True
+            self.finished.value = 1
 
     def _consumer(self, handler_func):
         """
-        Consumes lines from the queue, converts them to JSON entities, and processes them using the handler function.
-
-        Parameters:
-        - handler_func: A function to process each entity.
+        Consumes lines from the queue, parses JSON, then invokes handler_func with the entity.
+        Exits when 'finished' is set and the queue is empty.
         """
-        while (not self.finished.value) or (not self.queue.empty()):
-            lines_batch = None
+        while True:
+            # If we are finished and the queue is empty, exit
+            if self.finished.value == 1 and self.queue.empty():
+                break
+
             try:
-                lines_batch = self.queue.get(timeout=1)
-            except Exception as e:
-                if self.finished.value:
-                    break
+                line = self.queue.get(timeout=1)
+            except Exception:
+                # Usually queue.Empty, can wait for more data unless finished
+                continue
 
-            if lines_batch:
-                entities_batch = self.lines_to_entities(lines_batch)
-
-                for entity in entities_batch:
-                    if entity:
-                        handler_func(entity)
+            if line:
+                entity = self.line_to_entity(line)
+                if entity is not None:
+                    handler_func(entity)
 
                 with self.iterations.get_lock():
-                    self.iterations.value += len(entities_batch)
+                    self.iterations.value += 1
 
     def _read_jsonfile(self):
         """
-        Reads lines from a JSON file in batches.
-
-        Yields:
-        - A batch of lines from the JSON file.
+        Yields lines from a .json file, skipping self.skiplines lines at the start.
         """
         file = None
         try:
-            file = open(self.file_path, mode="r")
-            for _ in tqdm(range(self.skiplines)):
+            file = open(self.file_path, mode="r", encoding="utf-8")
+            # Skip lines if requested
+            for _ in tqdm(range(self.skiplines), desc="Skipping lines"):
                 file.readline()
 
-            while True:
-                lines_batch = ''
-                for _ in range(self.batch_size):
-                    line = file.readline()
-                    if not line:
-                        break
-                    lines_batch = lines_batch + line
-
-                if lines_batch == '':
+            for line in file:
+                if not line:
                     break
-                yield lines_batch
-
+                yield line
         finally:
             if file:
                 file.close()
 
-
     def _read_zipfile(self):
         """
-        Reads lines from a compressed file (gzip or bz2) in batches.
-
-        Yields:
-        - A batch of lines from the compressed file.
+        Yields lines from a .gz or .bz2 file, skipping self.skiplines lines at the start.
         """
         file = None
         try:
             if self.extension == 'gz':
-                file = gzip.open(self.file_path, "rt")
+                file = gzip.open(self.file_path, mode="rt", encoding="utf-8")
             elif self.extension == 'bz2':
-                file = bz2.open(self.file_path, "rt")
+                file = bz2.open(self.file_path, mode="rt", encoding="utf-8")
             else:
-                raise ValueError("Zip file extension is not supported")
+                raise ValueError(f"Unsupported extension '{self.extension}'")
 
-            for _ in range(self.skiplines):
+            for _ in tqdm(range(self.skiplines), desc="Skipping lines"):
                 file.readline()
 
-            while True:
-                lines_batch = ''
-                for _ in range(self.batch_size):
-                    line = file.readline()
-                    if not line:
-                        break
-                    lines_batch = lines_batch + line
-
-                if lines_batch == '':
+            for line in file:
+                if not line:
                     break
-                yield lines_batch
-
+                yield line
         finally:
             if file:
                 file.close()
