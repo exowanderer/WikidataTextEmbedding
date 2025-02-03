@@ -5,10 +5,8 @@ The Wikidata Embedding Project is an initiative led by Wikimedia Deutschland, in
 
 For more details, visit [the Wikidata Embedding Project page](https://www.wikidata.org/wiki/Wikidata:Embedding_Project).
 
-This project contains several Docker containers to process the Wikidata Dump and save relevant data in a SQLite database, and then push the data to a DataStax vector database. Please run the containers sequentially as described below.
-
 ## Getting Started
-This project is built using Docker Compose, managing multiple containers to construct the Wikidata embeddings. Here's the overview of the container:
+This project contains several Docker containers to process the Wikidata Dump and save relevant data in a SQLite database, and then push the data to a DataStax vector database. Please run the containers sequentially as described below.
 
 ---
 
