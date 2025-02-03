@@ -1,0 +1,10 @@
+tqdm
+psutil
+orjson
+pandas
+
+# wikidataDB
+sqlalchemy
+
+datasets
+huggingface-hub

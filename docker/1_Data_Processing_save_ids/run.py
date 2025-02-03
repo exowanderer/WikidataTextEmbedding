@@ -1,12 +1,11 @@
 import sys
 sys.path.append('../src')
 
-from wikidata_dumpreader import WikidataDumpReader
+from wikidataDumpReader import WikidataDumpReader
 from wikidataDB import WikidataID
 from multiprocessing import Manager
-import asyncio
 import os
-import gc
+import time
 
 FILEPATH = os.getenv("FILEPATH", '../data/Wikidata/latest-all.json.bz2')
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 1000))
@@ -25,10 +24,6 @@ def save_ids_to_sqlite(item, bulk_ids, sqlitDBlock):
                 worked = WikidataID.add_bulk_ids(list(bulk_ids[:BATCH_SIZE]))
                 if worked:
                     del bulk_ids[:BATCH_SIZE]
-                    gc.collect()
-
-async def run_processor(wikidata, bulk_ids, sqlitDBlock):
-    await wikidata.run(lambda item: save_ids_to_sqlite(item, bulk_ids, sqlitDBlock), max_iterations=None, verbose=True)
 
 if __name__ == "__main__":
     multiprocess_manager = Manager()
@@ -36,12 +31,11 @@ if __name__ == "__main__":
     bulk_ids = multiprocess_manager.list()
 
     wikidata = WikidataDumpReader(FILEPATH, num_processes=NUM_PROCESSES, batch_size=BATCH_SIZE, queue_size=QUEUE_SIZE, skiplines=SKIPLINES)
-
-    asyncio.run(run_processor(wikidata, bulk_ids, sqlitDBlock))
+    wikidata.run(lambda item: save_ids_to_sqlite(item, bulk_ids, sqlitDBlock), max_iterations=None, verbose=True)
 
     while len(bulk_ids) > 0:
         worked = WikidataID.add_bulk_ids(list(bulk_ids))
         if worked:
             bulk_ids[:] = []
         else:
-            asyncio.sleep(1)
+            time.sleep(1)

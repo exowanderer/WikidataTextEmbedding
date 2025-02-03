@@ -2,7 +2,6 @@ import gzip
 import bz2
 import orjson
 import time
-import psutil
 from tqdm import tqdm
 from multiprocessing import Process, Queue, Value
 
@@ -22,12 +21,11 @@ class WikidataDumpReader:
         self.num_processes = num_processes
         self.skiplines = skiplines
 
-        # This queue is shared across all processes
-        self.queue = Queue(maxsize=queue_size)
-
-        # Shared multiprocessing values:
+        # Multiprocessing Variables:
+        # - queue: This queue is shared across all processes
         # - finished: 0 => not finished, 1 => finished
         # - iterations: a counter for how many entities have been processed
+        self.queue = Queue(maxsize=queue_size)
         self.finished = Value('i', 0)
         self.iterations = Value('i', 0)
 
@@ -49,7 +47,6 @@ class WikidataDumpReader:
             entity = orjson.loads(line)
             return entity
         except ValueError as e:
-            # You can either log and continue or re-raise
             print("Failed to parse JSON:", e)
             return None
 
@@ -58,58 +55,50 @@ class WikidataDumpReader:
         Starts processing using a producer-consumer model with multiprocessing.
 
         Spawns:
-          - 1 Producer process (reads lines from file, pushes to queue).
-          - N Consumer processes (parse lines, call handler_func).
-          - 1 Reporter process (optional) that prints stats periodically.
+        - 1 Producer process (reads lines from file, pushes to queue).
+        - N Consumer processes (parse lines, call handler_func).
+        - 1 Reporter process (optional, prints stats periodically if verbose=True).
 
         Parameters:
         - handler_func (callable): A function that takes a parsed entity (dict) as input.
         - max_iterations (int or None): Stop after this many lines (if not None).
         - verbose (bool): If True, spawns a reporter process to print stats.
         """
-        # Create processes
         producer_p = Process(target=self._producer, args=(max_iterations,))
         consumer_ps = [
             Process(target=self._consumer, args=(handler_func,))
             for _ in range(self.num_processes)
         ]
 
-        # Optional reporter
         reporter_p = None
         if verbose:
-            reporter_p = Process(target=self._reporter, args=([producer_p] + consumer_ps,))
+            reporter_p = Process(target=self._reporter)
 
-        # Start processes
         producer_p.start()
         for cp in consumer_ps:
             cp.start()
         if reporter_p:
             reporter_p.start()
 
-        # Wait for processes to finish
         producer_p.join()
         for cp in consumer_ps:
             cp.join()
         if reporter_p:
             reporter_p.join()
 
-    def _reporter(self):
+    def _reporter(self, print_per_s=3):
         """
-        Runs in its own process: reports overall progress and total memory usage every few seconds
-        until the producer has finished and the queue is empty.
+        Reports overall progress and total memory usage every few seconds, until the producer has finished and the queue is empty.
 
-        Parameters
-        ----------
-        processes : list of multiprocessing.Process
-            The list of processes (producer + consumers + possibly others) to track.
+        Parameters:
+        - print_per_s: Number of seconds between each print.
         """
 
         start_time = time.time()
 
         while True:
-            time.sleep(3)
+            time.sleep(print_per_s)
 
-            # Grab iteration count
             with self.iterations.get_lock():
                 items_processed = self.iterations.value
 
@@ -120,16 +109,14 @@ class WikidataDumpReader:
             elapsed = time.time() - start_time
             rate = items_processed / elapsed if elapsed > 0 else 0.0
 
-            print(
-                f"Items Processed: {items_processed} | "
-                f"Processing Rate: {rate:.0f} items/sec"
-            )
-
+            print(f"Items Processed: {items_processed} | Processing Rate: {rate:.0f} items/sec")
 
     def _producer(self, max_iterations):
         """
-        Reads lines from the file (plain or compressed) and puts them into the queue.
-        Once done (or max_iterations reached), marks 'finished' as 1.
+        Reads lines from the file (plain or compressed) and puts them into the queue. Once done (or if max_iterations is reached), marks 'finished' as 1.
+
+        Parameters:
+        - max_iterations (int or None): If not None, stop reading after this many lines.
         """
         with self.finished.get_lock():
             self.finished.value = 0  # not finished
@@ -143,19 +130,20 @@ class WikidataDumpReader:
             raise ValueError(f"File extension '{self.extension}' is not supported")
 
         for line in lines_gen:
-            self.queue.put(line)  # Blocks if the queue is full
+            self.queue.put(line)
             iters += 1
             if max_iterations and iters >= max_iterations:
                 break
 
-        # Mark as finished
         with self.finished.get_lock():
-            self.finished.value = 1
+            self.finished.value = 1 # Mark as finished
 
     def _consumer(self, handler_func):
         """
-        Consumes lines from the queue, parses JSON, then invokes handler_func with the entity.
-        Exits when 'finished' is set and the queue is empty.
+        Consumes lines from the queue, parses JSON, then invokes handler_func with the entity. Exits when 'finished' is set and the queue is empty.
+
+        Parameters:
+        - handler_func (callable): A function that takes a parsed entity (dict) as input.
         """
         while True:
             # If we are finished and the queue is empty, exit
@@ -179,6 +167,9 @@ class WikidataDumpReader:
     def _read_jsonfile(self):
         """
         Yields lines from a .json file, skipping self.skiplines lines at the start.
+
+        Returns:
+        - Iterator[str]: An iterator over lines from the JSON file.
         """
         file = None
         try:
@@ -198,6 +189,9 @@ class WikidataDumpReader:
     def _read_zipfile(self):
         """
         Yields lines from a .gz or .bz2 file, skipping self.skiplines lines at the start.
+
+        Returns:
+        - Iterator[str]: An iterator over lines from the compressed file.
         """
         file = None
         try:

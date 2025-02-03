@@ -20,26 +20,23 @@ time_variables = {
     'billion years': 'billion years',
 }
 
-def merge_entity_description(label, description, aliases):
-    text = f"{label}, {description}"
-
-    if len(aliases) > 0:
-        text += f", also known as {', '.join(aliases)}"
-
-    return text
-
 def merge_entity_text(label, description, aliases, properties):
     """
-    Combines the entity description and its claims into a single text string.
+    Combines the entity attributes (label, description, aliases, and properties) into a single text string.
 
     Parameters:
-    - entity_description: A string representing the entity's label, description, and aliases.
-    - properties: A list of strings representing the claims of the entity.
+    - label: A string representing the entity's label.
+    - description: A string representing the entity's description.
+    - aliases: A dictionary of aliases.
+    - properties: A dictionary of properties.
 
     Returns:
     - A string representation of the entity, its description, label, aliases, and its claims. If there are no claims, the description ends with a period.
     """
-    text = merge_entity_description(label, description, aliases)
+    text = f"{label}, {description}"
+
+    if len(aliases) > 0:
+        text += f", also known as {', '.join(aliases)}"
 
     if len(properties) > 0:
         properties_text = properties_to_text(properties)
@@ -65,7 +62,7 @@ def qualifiers_to_text(qualifiers):
         if len(text) > 0:
             text += f" ; "
 
-        text += f"{property_label}: {','.join(qualifier_values)}"
+        text += f"{property_label}: {', '.join(qualifier_values)}"
     return text
 
 def properties_to_text(properties):
@@ -85,13 +82,13 @@ def properties_to_text(properties):
             claims_text = ""
             for claim_value in claim_values:
                 if len(claims_text) > 0:
-                    claims_text += f",\n"
+                    claims_text += f",\n "
 
                 claims_text += f"\"{claim_value['value']}"
 
                 qualifiers = claim_value.get('qualifiers', {})
                 if len(qualifiers) > 0:
-                    claims_text += f"({qualifiers_to_text(qualifiers)})"
+                    claims_text += f" ({qualifiers_to_text(qualifiers)})"
 
                 claims_text += f"\""
 

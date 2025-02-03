@@ -5,15 +5,17 @@ from sqlalchemy.types import TypeDecorator
 import json
 import os
 
+"""
+SQLite database setup for quick entity lookup. A database file is created per language.
+"""
 LANGUAGE = os.getenv("LANGUAGE", 'en')
-engine = create_engine(f'sqlite:///../data/Wikidata/sqlite_{LANGUAGE}wiki.db',
+engine = create_engine(
+    f'sqlite:///../data/Wikidata/sqlite_{LANGUAGE}wiki.db',
     pool_size=5,       # Limit the number of open connections
     max_overflow=10,   # Allow extra connections beyond pool_size
-    pool_recycle=10  # Recycle connections every 10 seconds
+    pool_recycle=10    # Recycle connections every 10 seconds
 )
 Base = declarative_base()
-Base.metadata.create_all(engine)
-
 Session = sessionmaker(bind=engine)
 
 class JSONType(TypeDecorator):
@@ -31,13 +33,15 @@ class JSONType(TypeDecorator):
         return None
 
 class WikidataEntity(Base):
+    """Represents a Wikidata entity with label, description, aliases, and claims."""
+
     __tablename__ = 'wikidata'
 
     id = Column(Text, primary_key=True)
     label = Column(Text)
     description = Column(Text)
-    claims = Column(JSONType)
     aliases = Column(JSONType)
+    claims = Column(JSONType)
 
     @staticmethod
     def add_bulk_entities(data):
@@ -45,10 +49,10 @@ class WikidataEntity(Base):
         Add multiple entities to the database in bulk, if the item already exists then it's ignored.
 
         Parameters:
-        - data: A list of dictionaries representing entities to be added.
+        - data (list[dict]): A list of dictionaries representing entities to be added.
 
         Returns:
-        - True if the operation was successful, False otherwise.
+        - bool: True if the operation was successful, False otherwise.
         """
         worked = False
         with Session() as session:
@@ -74,17 +78,17 @@ class WikidataEntity(Base):
     @staticmethod
     def add_entity(id, label, description, claims, aliases):
         """
-        Add a single entity to the database.
+        Add a single Wikidata entity to the database.
 
         Parameters:
-        - id: The unique identifier for the entity.
-        - label: The label of the entity.
-        - description: The description of the entity.
-        - claims: The claims related to the entity in JSON format.
-        - aliases: The aliases for the entity in JSON format.
+        - id (str): The unique identifier for the entity.
+        - label (str): The entity's label.
+        - description (str): The entity's description.
+        - claims (dict): The entity's claims.
+        - aliases (dict): The entity's aliases.
 
         Returns:
-        - True if the operation was successful, False otherwise.
+        - bool: True if successful, False otherwise.
         """
         worked = False
         with Session() as session:
@@ -108,13 +112,13 @@ class WikidataEntity(Base):
     @staticmethod
     def get_entity(id):
         """
-        Retrieve an entity by ID
+        Retrieve an entity by its ID.
 
         Parameters:
-        - id: The unique identifier of the entity to be retrieved.
+        - id (str): The unique identifier of the entity.
 
         Returns:
-        - The entity object if found, otherwise None.
+        - WikidataEntity or None: The entity object if found, otherwise None.
         """
         with Session() as session:
             return session.query(WikidataEntity).filter_by(id=id).first()
@@ -125,11 +129,11 @@ class WikidataEntity(Base):
         Normalize a Wikidata item into a dictionary for storage.
 
         Parameters:
-        - item: A dictionary representing the Wikidata item.
-        - language: The language code to use for labels and descriptions (default is 'en').
+        - item (dict): The raw Wikidata item.
+        - language (str): The language code to use for label/description lookup. Default is 'en'.
 
         Returns:
-        - A dictionary containing normalized entity data.
+        - dict: A dictionary containing normalized entity data suitable for insertion.
         """
         label = item['labels'][language]['value'] if (language in item['labels']) else (item['labels']['mul']['value'] if ('mul' in item['labels']) else '') # Take the label from the language, if missing take it from the multiligual class
         description = item['descriptions'][language]['value'] if (language in item['descriptions']) else (item['descriptions']['mul']['value'] if ('mul' in item['descriptions']) else '') # Take the description from the language, if missing take it from the multiligual class
@@ -143,24 +147,20 @@ class WikidataEntity(Base):
             'claims': json.dumps(claims, separators=(',', ':')),
         }
 
-
     @staticmethod
     def _remove_keys(data, keys_to_remove=['hash', 'property', 'numeric-id', 'qualifiers-order']):
         """
-        Remove unnecessary keys from a nested data structure before storing.
+        Recursively remove specific keys from a nested data structure.
 
         Parameters:
-        - data: The data structure (dictionary or list) from which keys need to be removed.
-        - keys_to_remove: A list of keys to be removed (default is ['hash', 'property', 'numeric-id', 'qualifiers-order']).
+        - data (dict or list): The data structure to clean.
+        - keys_to_remove (list): Keys to remove. Default includes 'hash', 'property', 'numeric-id', and 'qualifiers-order'.
 
         Returns:
-        - The data structure with specified keys removed.
+        - dict or list: The cleaned data structure with specified keys removed.
         """
         if isinstance(data, dict):
-            return {
-                key: WikidataEntity._remove_keys(value, keys_to_remove)
-                for key, value in data.items() if key not in keys_to_remove
-            }
+            return {key: WikidataEntity._remove_keys(value, keys_to_remove) for key, value in data.items() if key not in keys_to_remove}
         elif isinstance(data, list):
             return [WikidataEntity._remove_keys(item, keys_to_remove) for item in data]
         else:
@@ -169,13 +169,13 @@ class WikidataEntity(Base):
     @staticmethod
     def _get_claims(item):
         """
-        Extract claims from a Wikidata item.
+        Extract and clean claims from a Wikidata item.
 
         Parameters:
-        - item: A dictionary representing the Wikidata item.
+        - item (dict): The raw Wikidata item.
 
         Returns:
-        - A dictionary containing the extracted claims.
+        - dict: A dictionary of extracted claims, keyed by property ID.
         """
         claims = {}
         if 'claims' in item:
@@ -195,14 +195,14 @@ class WikidataEntity(Base):
     @staticmethod
     def _get_aliases(item, language='en'):
         """
-        Extract aliases from a Wikidata item.
+        Extract aliases from a Wikidata item for a given language, plus any 'mul' entries.
 
         Parameters:
-        - item: A dictionary representing the Wikidata item.
-        - language: The language code to use for extracting aliases (default is 'en').
+        - item (dict): The raw Wikidata item.
+        - language (str): The language code. Default is 'en'.
 
         Returns:
-        - A list of aliases for the specified language.
+        - list[str]: A list of aliases in the specified language (and 'mul' if present).
         """
         aliases = set()
         if language in item['aliases']:
@@ -211,35 +211,9 @@ class WikidataEntity(Base):
             aliases = aliases | set([x['value'] for x in item['aliases']['mul']])
         return list(aliases)
 
-    @staticmethod
-    def clean_claims_for_storage(claims):
-        """
-        Cleans Wikidata claims to prepare them for storage in a database.
-
-        Parameters:
-        - claims: A dictionary where each key is a property ID (pid) and each value is a list of claim statements related to the property.
-
-        Returns:
-        - A dictionary with cleaned claims.
-        """
-        def clean_item(item):
-            if 'datavalue' not in item['mainsnak']:
-                return {'type': item['mainsnak']['snaktype']}
-            if isinstance(item['mainsnak']['datavalue']['value'], dict):
-                value = {'type': item['mainsnak']['datavalue']['type'], **item['mainsnak']['datavalue']['value']}
-                if 'entity-type' in value:
-                    del value['entity-type']
-                return value
-            return {'type': item['mainsnak']['datavalue']['type'], 'value': item['mainsnak']['datavalue']['value']}
-
-        cleaned_claims = {
-            pid: [clean_item(item) for item in value]
-            for pid, value in claims.items()
-        }
-        return cleaned_claims
-
-
 class WikidataID(Base):
+    """ Represents an ID record in the database, indicating whether it appears in Wikipedia or is a property. """
+
     __tablename__ = 'wikidataID'
 
     id = Column(Text, primary_key=True)
@@ -249,14 +223,13 @@ class WikidataID(Base):
     @staticmethod
     def add_bulk_ids(data):
         """
-        Add multiple IDs to the database in bulk. If an ID already exists, update the boolean fields (`in_wikipedia` and `is_property`) to True if either the new or old value is True.
-        This ensures that `in_wikipedia` is correctly set if an entity is first found in a claim of another entity in Wikipedia, but later discovered to also exist in Wikipedia itself.
+        Add multiple IDs to the database in bulk. If an ID exists, update its boolean fields.
 
         Parameters:
-        - data: A list of dictionaries containing ID data to be added or updated.
+        - data (list[dict]): A list of dictionaries with 'id', 'in_wikipedia', and 'is_property' fields.
 
         Returns:
-        - True if the operation was successful, False otherwise.
+        - bool: True if successful, False otherwise.
         """
         worked = False
         with Session() as session:
@@ -285,15 +258,15 @@ class WikidataID(Base):
     @staticmethod
     def add_id(id, in_wikipedia=False, is_property=False):
         """
-        Add a single ID to the database.
+        Add a single ID record to the database.
 
         Parameters:
-        - id: The unique identifier for the entity.
-        - in_wikipedia: Boolean indicating if the entity is in Wikipedia (default is False).
-        - is_property: Boolean indicating if the entity is a property (default is False).
+        - id (str): The unique identifier.
+        - in_wikipedia (bool): Whether the entity is in Wikipedia. Default is False.
+        - is_property (bool): Whether the entity is a property. Default is False.
 
         Returns:
-        - True if the operation was successful, False otherwise.
+        - bool: True if successful, False otherwise.
         """
         worked = False
         with Session() as session:
@@ -311,13 +284,13 @@ class WikidataID(Base):
     @staticmethod
     def get_id(id):
         """
-        Retrieve an ID from the database.
+        Retrieve a record by its ID.
 
         Parameters:
-        - id: The unique identifier of the ID to be retrieved.
+        - id (str): The unique identifier of the record.
 
         Returns:
-        - The ID object if found, otherwise None.
+        - WikidataID or None: The record if found, otherwise None.
         """
         with Session() as session:
             return session.query(WikidataID).filter_by(id=id).first()
@@ -328,11 +301,11 @@ class WikidataID(Base):
         Check if a Wikidata item has a corresponding Wikipedia entry.
 
         Parameters:
-        - item: A dictionary representing the Wikidata item.
-        - language: The language code to check for (default is 'en').
+        - item (dict): The Wikidata item.
+        - language (str): The Wikipedia language code. Default is 'en'.
 
         Returns:
-        - True if the item has a corresponding Wikipedia entry, False otherwise.
+        - bool: True if the item has a Wikipedia sitelink and label/description in the specified language or 'mul'.
         """
         condition = ('sitelinks' in item) and (f'{language}wiki' in item['sitelinks']) # Has an Wikipedia Sitelink
         condition = condition and ((language in item['labels']) or ('mul' in item['labels'])) # Has a label with the corresponding language or multiligual
@@ -342,14 +315,14 @@ class WikidataID(Base):
     @staticmethod
     def extract_entity_ids(item, language='en'):
         """
-        Extract entity IDs from a Wikidata item, including IDs of entities and properties found in claims and qualifiers as well as IDs of entities as units in quantity datatype.
+        Extract entity and property IDs from a Wikidata item (including claims, qualifiers, and units).
 
         Parameters:
-        - item: A dictionary representing the Wikidata item.
-        - language: The language code to use for extracting data (default is 'en').
+        - item (dict): The Wikidata item.
+        - language (str): The language code for additional checks. Default is 'en'.
 
         Returns:
-        - A list of dictionaries containing entity IDs and their properties.
+        - list[dict]: A list of dictionaries with 'id', 'in_wikipedia', and 'is_property' for each discovered ID.
         """
         if item is None:
             return []
@@ -391,4 +364,5 @@ class WikidataID(Base):
                                     batch_ids.append({'id': id, 'in_wikipedia': False, 'is_property': False})
         return batch_ids
 
+# Create tables if they don't already exist.
 Base.metadata.create_all(engine)

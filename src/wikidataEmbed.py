@@ -4,215 +4,112 @@ import time
 import json
 from datetime import date, datetime
 import re
+import importlib
 
 class WikidataTextifier:
-    def __init__(self, with_claim_desc=False, with_claim_aliases=False, with_property_desc=False, with_property_aliases=False, language='en'):
+    def __init__(self, language='en'):
         """
-        Initializes the WikidataTextifier with options to include descriptions and aliases for both entities and properties.
+        Initializes the WikidataTextifier with the specified language.
 
         Parameters:
-        - with_claim_desc: Whether to include the descriptions of entities in claims in the output text.
-        - with_claim_aliases: Whether to include the aliases of entities in claims in the output text.
-        - with_property_desc: Whether to include the descriptions of claim properties in the output text.
-        - with_property_aliases: Whether to include the aliases of claim properties in the output text.
+        - language (str): The language code used by the textifier (default is "en").
         """
-        self.with_claim_desc = with_claim_desc
-        self.with_claim_aliases = with_claim_aliases
-        self.with_property_desc = with_property_desc
-        self.with_property_aliases = with_property_aliases
 
         self.language = language
-        self.lang_values = {
-            'en': {
-                'months': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                'century': 'th century',
-                'millennium': 'th millennium',
-                'decade': 's',
-                'AD': 'AD',
-                'BC': 'BC',
-                'years': 'years',
-                'ten thousand years': 'ten thousand years',
-                'hundred thousand years': 'hundred thousand years',
-                'million years': 'million years',
-                'tens of millions of years': 'tens of millions of years',
-                'hundred million years': 'hundred million years',
-                'billion years': 'billion years',
-                'novalue': 'no value',
-                ',': ',',
-                'l"': "\"",
-                'r"': "\"",
-                "(": "(",
-                ")": ")",
-                ";": ";"
-            },
-            'de': {
-                'months': ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
-                'century': '. Jahrhundert',
-                'millennium': '. Jahrtausend',
-                'decade': 'er Jahre',
-                'AD': 'n. Chr.',
-                'BC': 'v. Chr.',
-                'years': 'Jahre',
-                'ten thousand years': 'Zehntausend Jahre',
-                'hundred thousand years': 'Hunderttausend Jahre',
-                'million years': 'Millionen Jahre',
-                'tens of millions of years': 'Zehn Millionen Jahre',
-                'hundred million years': 'Hundert Millionen Jahre',
-                'billion years': 'Milliarden Jahre',
-                'novalue': 'no Wert',
-                ',': ',',
-                'l"': "„",
-                'r"': "“",
-                "(": "(",
-                ")": ")",
-                ";": ";"
-            },
-            'ar': {
-                'months': ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'],
-                'century': 'قرن',
-                'millennium': 'ألفية',
-                'decade': 'عقد',
-                'AD': 'م',
-                'BC': 'ق.م',
-                'years': 'سنوات',
-                'ten thousand years': 'عشرة آلاف سنة',
-                'hundred thousand years': 'مئات آلاف السنين',
-                'million years': 'ملايين السنين',
-                'tens of millions of years': 'عشرات الملايين من السنين',
-                'hundred million years': 'مئات الملايين من السنين',
-                'billion years': 'مليار سنة',
-                'novalue': 'لا قيمة',
-                ',': '،',
-                'l"': "«",
-                'r"': "»",
-                "(": "(",
-                ")": ")",
-                ";": "؛"
-            }
-        }
-        assert (self.language in self.lang_values), 'Language not found for time parser'
-        self.lang = self.lang_values[self.language]
+        try:
+            # Importing custom functions and variables from a formating python script in the language_variables folder.
+            self.langvar = importlib.import_module(f"language_variables.{language}")
+        except Exception as e:
+            raise ValueError(f"Language file for '{language}' not found.")
 
-    def merge_entity_property_text(self, entity_description, properties):
+    def entity_to_text(self, entity, properties=None):
         """
-        Combines the entity description and its claims into a single text string.
+        Converts a Wikidata entity into a human-readable text string.
 
         Parameters:
-        - entity_description: A string representing the entity's label, description, and aliases.
-        - properties: A list of strings representing the claims of the entity.
+        - entity (WikidataEntity): A WikidataEntity object containing entity data (label, description, claims, etc.).
+        - properties (dict or None): A dictionary of properties (claims). If None, the properties will be derived from entity.claims.
 
         Returns:
-        - A string representation of the entity, its description, label, aliases, and its claims. If there are no claims, the description ends with a period.
+        - str: A human-readable representation of the entity, its description, aliases, and claims.
         """
-        if len(properties) > 0:
-            if self.language == 'de':
-                entity_text = f"{entity_description}. Attribute umfassen: {''.join(properties)}"
-            elif self.language == 'ar':
-                entity_text = f"{entity_description}. السمات تتضمن: {''.join(properties)}"
-            else:
-                entity_text = f"{entity_description}. Attributes include: {''.join(properties)}"
-        else:
-            entity_text = f"{entity_description}."
-        return entity_text
+        if properties is None:
+            properties = self.properties_to_dict(entity.claims)
 
-    def aliases_to_text(self, aliases):
-        if len(aliases) == 0:
-            return ""
+        return self.langvar.merge_entity_text(entity.label, entity.description, entity.aliases, properties)
 
-        if self.language == 'de':
-            return f", auch bekannt als {', '.join(aliases)}"
-        elif self.language == 'ar':
-            return f"، المعروف أيضًا باسم {'، '.join(aliases)}"
-        return f", also known as {', '.join(aliases)}"
-
-    def entity_to_text(self, entity, as_list=False):
+    def properties_to_dict(self, properties):
         """
-        Converts a Wikidata entity into a readable text string, including its label, description, aliases, and claims.
+        Converts a dictionary of properties (claims) into a dict suitable for text generation.
 
         Parameters:
-        - entity: A WikidataEntity object that contains information about the entity.
-        - as_list: If True, returns the entity description and a list of claim strings separately. If False, returns a combined text string.
+        - properties (dict): A dictionary of claims keyed by property IDs. 
+                             Each value is a list of claim statements for that property.
 
         Returns:
-        - If as_list is False: A string representing the entity, its description, label, aliases, and its claims.
-        - If as_list is True:
-            - entity_description: A string representing the entity's label, description, and aliases.
-            - properties: A list of strings representing the entity's claims.
+        - dict: A dictionary mapping property labels to a list of their parsed values (and qualifiers).
         """
-        properties = self.properties_to_text(entity.claims)
-
-        entity_description = f"{entity.label}{self.lang[',']} {entity.description}"
-
-        if len(entity.aliases) > 0:
-            entity_description += self.aliases_to_text(entity.aliases)
-
-        if as_list:
-            return entity_description, properties
-        return self.merge_entity_property_text(entity_description, properties)
-
-    def properties_to_text(self, properties):
-        """
-        Converts a list of properties (claims) to a readable text string.
-
-        Parameters:
-        - properties: A dictionary of properties (claims) with property IDs as keys.
-
-        Returns:
-        - A string representation of the properties and their values.
-        """
-        properties_text = []
+        properties_dict = {}
         for pid, claim in properties.items():
             p_data = []
             rank_preferred_found = False
 
             for c in claim:
                 value = self.mainsnak_to_value(c.get('mainsnak', c))
-                qualifiers = self.qualifiers_to_text(c.get('qualifiers', {}))
+                qualifiers = self.qualifiers_to_dict(c.get('qualifiers', {}))
                 rank = c.get('rank', 'normal').lower()
 
+                # Only store "normal" ranks. if one "preferred" rank exists, then only store "preferred" ranks.
                 if value:
-                    if (not rank_preferred_found) or (rank == 'preferred'):
-                        # If there exists values with rank preferred, then we only use those values. Else we use all values.
+                    if ((not rank_preferred_found) and (rank == 'normal')) or (rank == 'preferred'):
                         if (not rank_preferred_found) and (rank == 'preferred'):
-                            # If we find the first value with rank preferred, we reset p_data and set the flag to true to only include preferred values.
                             rank_preferred_found = True
                             p_data = []
 
-                        if len(qualifiers) > 0:
-                            value += f" {self.lang['(']}{qualifiers}{self.lang[')']}"
-                        p_data.append(value)
+                        p_data.append({'value': value, 'qualifiers': qualifiers})
 
             if len(p_data) > 0:
                 property = WikidataEntity.get_entity(pid)
                 if property:
-                    text = f"\n- {property.label}"
-                    if self.with_property_desc:
-                        text += f"{self.lang[',']} {property.description}"
+                    properties_dict[property.label] = p_data
 
-                    if self.with_property_aliases and (len(property.aliases) > 0):
-                        text += self.aliases_to_text(property.aliases)
+        return properties_dict
 
-                    if len(p_data) > 1:
-                        p_data_text = self.lang['r\"'] + self.lang[','] + " \n " + self.lang['l\"']
-                        p_data_text = p_data_text.join(p_data)
-                    else:
-                        p_data_text = p_data[0]
+    def qualifiers_to_dict(self, qualifiers):
+        """
+        Converts qualifiers into a dictionary suitable for text generation.
 
-                    text += ": " + self.lang['l"'] + p_data_text + self.lang['r"']
-                    properties_text.append(text)
-        return properties_text
+        Parameters:
+        - qualifiers (dict): A dictionary of qualifiers keyed by property IDs. 
+                             Each value is a list of qualifier statements.
+
+        Returns:
+        - dict: A dictionary mapping property labels to a list of their parsed values.
+        """
+        qualifier_dict = {}
+        for pid, qualifier in qualifiers.items():
+            q_data = []
+
+            for q in qualifier:
+                value = self.mainsnak_to_value(q)
+                if value:
+                    q_data.append(value)
+
+            if len(q_data) > 0:
+                property = WikidataEntity.get_entity(pid)
+                if property:
+                    qualifier_dict[property.label] = q_data
+        return qualifier_dict
 
     def mainsnak_to_value(self, mainsnak):
         """
-        Converts a Wikidata mainsnak to a readable value. A mainsnak is a part of a claim and
-        stores the actual value of the statement.
-        Datatypes that are kept include: wikibase-item, wikibase-property, monolingualtext, string, time, and quantity
+        Converts a Wikidata 'mainsnak' object into a human-readable value string. This method interprets various datatypes (e.g., wikibase-item, string, time, quantity) and returns a formatted text representation.
 
         Parameters:
-        - mainsnak: The snak object that contains the value and datatype information.
+        - mainsnak (dict): A snak object containing the value and datatype information.
 
         Returns:
-        - A string representation of the value or None if the value cannot be parsed.
+        - str or None: A string representation of the value, or None if parsing fails.
         """
         if mainsnak.get('snaktype', '') == 'value':
             if (mainsnak.get('datatype', '') == 'wikibase-item') or (mainsnak.get('datatype', '') == 'wikibase-property'):
@@ -222,11 +119,6 @@ class WikidataTextifier:
                     return None
 
                 text = entity.label
-                if self.with_claim_desc:
-                    text += f"{self.lang[',']} {entity.description}"
-
-                if self.with_claim_aliases and len(entity.aliases) > 0:
-                    text += self.aliases_to_text(entity.aliases)
                 return text
 
             elif mainsnak.get('datatype', '') == 'monolingualtext':
@@ -239,7 +131,7 @@ class WikidataTextifier:
                 try:
                     return self.time_to_text(mainsnak['datavalue']['value'])
                 except Exception as e:
-                    print(e)
+                    print("Error in time formating:", e)
                     return mainsnak['datavalue']['value']["time"]
 
             elif mainsnak.get('datatype', '') == 'quantity':
@@ -250,52 +142,24 @@ class WikidataTextifier:
                     return mainsnak['datavalue']['value']['amount']
 
         elif mainsnak.get('snaktype', '') == 'novalue':
-            return self.lang_values[self.language]['novalue']
+            return self.langvar.novalue
 
         return None
 
-    def qualifiers_to_text(self, qualifiers):
-        """
-        Converts a list of qualifiers to a readable text string.
-        Qualifiers provide additional information about a claim.
-
-        Parameters:
-        - qualifiers: A dictionary of qualifiers with property IDs as keys and their values as lists.
-
-        Returns:
-        - A string representation of the qualifiers.
-        """
-        text = ""
-        for pid, qualifier in qualifiers.items():
-            q_data = []
-
-            for q in qualifier:
-                value = self.mainsnak_to_value(q)
-                if value:
-                    q_data.append(value)
-
-            if len(q_data) > 0:
-                property = WikidataEntity.get_entity(pid)
-                if property:
-                    if len(text) > 0:
-                        text += f" {self.lang[';']} "
-                    q_data_text = f"{self.lang[',']} ".join(q_data)
-                    text += f"{property.label}: {q_data_text}"
-        return text
-
     def quantity_to_text(self, quantity_data):
         """
-        Converts quantity data into a readable text string.
+        Converts Wikidata quantity data into a human-readable string.
 
         Parameters:
-        - quantity_data: A dictionary that includes a quantity value and an optional unit.
+        - quantity_data (dict): A dictionary with 'amount' and optionally 'unit' (often a QID).
 
         Returns:
-        - A string representation of the quantity and its unit (if available).
+        - str: A textual representation of the quantity (e.g., "5 kg").
         """
         quantity = quantity_data.get('amount')
         unit = quantity_data.get('unit')
 
+        # 'unit' of '1' means that the value is a count and doesn't require a unit.
         if unit == '1':
             unit = None
         else:
@@ -308,13 +172,13 @@ class WikidataTextifier:
 
     def time_to_text(self, time_data):
         """
-        Converts time data into a readable text string.
+        Converts Wikidata time data into a human-readable string.
 
         Parameters:
-        - time_data: A dictionary that includes the time and other related information.
+        - time_data (dict): A dictionary containing the time string, precision, and calendar model.
 
         Returns:
-        - A string representation of the time.
+        - str: A textual representation of the time with appropriate granularity.
         """
         time_value = time_data['time']
         precision = time_data['precision']
@@ -345,9 +209,9 @@ class WikidataTextifier:
             month = int(month_str) if month_str != '00' else 1
             day = int(day_str) if day_str != '00' else 1
 
-        month_str = self.lang_values[self.language]['months'][month - 1] if month != 0 else ''
-        ad = self.lang_values[self.language]['AD']
-        bc = self.lang_values[self.language]['BC']
+        month_str = self.langvar.time_variables['months'][month - 1] if month != 0 else ''
+        ad = self.langvar.time_variables['AD']
+        bc = self.langvar.time_variables['BC']
 
         if precision == 14:
             return f"{year} {month_str} {day} {hour_str}:{minute_str}:{second_str}"
@@ -364,54 +228,54 @@ class WikidataTextifier:
             return f"{abs(year)}{era}"
         elif precision == 8:
             decade = (year // 10) * 10
-            decade_suffix = self.lang_values[self.language]['decade']
+            decade_suffix = self.langvar.time_variables['decade']
             era = ad if year > 0 else bc
             return f"{abs(decade)}{decade_suffix} {era}"
         elif precision == 7:
             century = (abs(year) - 1) // 100 + 1
             era = ad if year > 0 else bc
-            return f"{century}{self.lang_values[self.language]['century']} {era}"
+            return f"{century}{self.langvar.time_variables['century']} {era}"
         elif precision == 6:
             millennium = (abs(year) - 1) // 1000 + 1
             era = ad if year > 0 else bc
-            return f"{millennium}{self.lang_values[self.language]['millennium']} {era}"
+            return f"{millennium}{self.langvar.time_variables['millennium']} {era}"
         elif precision == 5:
             tens_of_thousands = abs(year) // 10000
             era = ad if year > 0 else bc
-            return f"{tens_of_thousands} {self.lang_values[self.language]['ten thousand years']} {era}"
+            return f"{tens_of_thousands} {self.langvar.time_variables['ten thousand years']} {era}"
         elif precision == 4:
             hundreds_of_thousands = abs(year) // 100000
             era = ad if year > 0 else bc
-            return f"{hundreds_of_thousands} {self.lang_values[self.language]['hundred thousand years']} {era}"
+            return f"{hundreds_of_thousands} {self.langvar.time_variables['hundred thousand years']} {era}"
         elif precision == 3:
             millions = abs(year) // 1000000
             era = ad if year > 0 else bc
-            return f"{millions} {self.lang_values[self.language]['million years']} {era}"
+            return f"{millions} {self.langvar.time_variables['million years']} {era}"
         elif precision == 2:
             tens_of_millions = abs(year) // 10000000
             era = ad if year > 0 else bc
-            return f"{tens_of_millions} {self.lang_values[self.language]['tens of millions of years']} {era}"
+            return f"{tens_of_millions} {self.langvar.time_variables['tens of millions of years']} {era}"
         elif precision == 1:
             hundreds_of_millions = abs(year) // 100000000
             era = ad if year > 0 else bc
-            return f"{hundreds_of_millions} {self.lang_values[self.language]['hundred million years']} {era}"
+            return f"{hundreds_of_millions} {self.langvar.time_variables['hundred million years']} {era}"
         elif precision == 0:
             billions = abs(year) // 1000000000
             era = ad if year > 0 else bc
-            return f"{billions} {self.lang_values[self.language]['billion years']} {era}"
+            return f"{billions} {self.langvar.time_variables['billion years']} {era}"
         else:
             raise ValueError(f"Unknown precision value {precision}")
 
     def data_to_text(self, data, datatype):
         """
-        Converts time or quantities into a readable text string.
+        Converts specific Wikidata data (time or quantity) into a string using the Wikidata API. Ideally, this function should replace "time_to_text" and "quantity_to_text", however it's too slow.
 
         Parameters:
-        - data: A dictionary from the value parameters in Wikidata.
-        - datatype: datatype from Wikidata 'time' or 'quantity'
+        - data (dict): The dictionary structure of the datavalue (time or quantity).
+        - datatype (str): The datatype (usually 'time' or 'quantity').
 
         Returns:
-        - A string representation of the item.
+        - str: The formatted value (as returned by the Wikidata API).
         """
         while True:
             try:
@@ -420,7 +284,7 @@ class WikidataTextifier:
                     'format': 'json',
                     'datavalue': json.dumps(data),
                     'datatype': datatype,
-                    'uselang': self.language,
+                    'uselang': self.langvar.language,
                     'formatversion': 2
                 }
                 r = requests.get('https://www.wikidata.org/w/api.php', params=data)
@@ -438,17 +302,17 @@ class WikidataTextifier:
 
     def chunk_text(self, entity, tokenizer, max_length=500):
         """
-        Chunks a text into smaller pieces if the token length exceeds the model's maximum input length.
+        Splits a text representation of an entity into smaller chunks so that each chunk fits within the token limit of a given tokenizer.
 
         Parameters:
-        - entity: The entity containing the text to be chunked.
-        - textifier: A WikidataTextifier instance that helps convert the entity and its properties into text.
+        - entity (WikidataEntity): The entity to be textified and chunked.
+        - tokenizer: A tokenizer (e.g. from Hugging Face) used to count tokens.
+        - max_length (int): The maximum number of tokens allowed per chunk (default is 500).
 
         Returns:
-        - A list of text chunks that fit within the model's maximum token length.
+        - list[str]: A list of text chunks, each within the token limit.
         """
-        entity_description, properties = self.entity_to_text(entity, as_list=True)
-        entity_text = self.merge_entity_property_text(entity_description, properties)
+        entity_text = self.entity_to_text(entity)
         max_length = max_length
 
         # If the full text does not exceed the maximum tokens then we only return 1 chunk.
@@ -457,6 +321,7 @@ class WikidataTextifier:
             return [entity_text]
 
         # If the label and description already exceed the maximum tokens then we will truncate it and will not include chunks that include claims.
+        entity_description= self.entity_to_text(entity, properties={})
         tokens = tokenizer(entity_description, add_special_tokens=False, return_offsets_mapping=True)
         token_ids, offsets = tokens['input_ids'], tokens['offset_mapping']
         if len(token_ids) >= max_length:
@@ -464,35 +329,38 @@ class WikidataTextifier:
             return [entity_text[start:end]]  # Return the truncated portion of the original text
 
         # Create the chunks assuming the description/label text is smaller than the maximum tokens.
+        properties = self.properties_to_dict(entity.claims)
         chunks = []
-        chunk_claims = []
-        for claim in properties:
-            entity_text = self.merge_entity_property_text(entity_description, chunk_claims+[claim])
+        chunk_claims = {}
+        for claim, value in properties.items():
+            current_chunk_claims = {**chunk_claims, claim: value}
+            entity_text = self.entity_to_text(entity, current_chunk_claims)
             tokens = tokenizer(entity_text, add_special_tokens=False, return_offsets_mapping=True)
-            token_ids, offsets = tokens['input_ids'], tokens['offset_mapping']
 
             # Check when including the current claim if we exceed the maximum tokens.
-            if len(token_ids) >= max_length:
-                start, end = offsets[0][0], offsets[max_length - 1][1]
+            if len(tokens['input_ids']) >= max_length:
+                start, end = tokens['offset_mapping'][0][0], tokens['offset_mapping'][max_length - 1][1]
                 chunks.append(entity_text[start:end])
+
+                # If we do exceed it but there's no claim previously added to the chunks, then it means the current claim alone exceeds the maximum tokens, and we already included it in a trimmed chunk alone.
                 if len(chunk_claims) == 0:
-                    # If we do exceed it but there's no claim previously added to the chunks, then it means the current claim alone exceeds the maximum tokens, and we already included it in a trimmed chunk alone.
-                    chunk_claims = []
+                    chunk_claims = {}
+
+                # Include the claim in a new chunk so where it's information doesn't get trimmed.
                 else:
-                    # Include the claim in a new chunk so where it's information doesn't get trimmed.
-                    chunk_claims = [claim]
+                    chunk_claims = {claim: value}
             else:
-                chunk_claims.append(claim)
+                chunk_claims = current_chunk_claims
 
+        # Add the final chunk if any claims remain
         if len(chunk_claims) > 0:
-            entity_text = self.merge_entity_property_text(entity_description, chunk_claims)
+            entity_text = self.entity_to_text(entity, chunk_claims)
             tokens = tokenizer(entity_text, add_special_tokens=False, return_offsets_mapping=True)
-            token_ids, offsets = tokens['input_ids'], tokens['offset_mapping']
 
-            if len(token_ids) >= max_length:
-                start, end = offsets[0][0], offsets[max_length - 1][1]
+            if len(tokens['input_ids']) >= max_length:
+                start, end = tokens['offset_mapping'][0][0], tokens['offset_mapping'][max_length - 1][1]
             else:
-                start, end = offsets[0][0], offsets[-1][1]
+                start, end = tokens['offset_mapping'][0][0], tokens['offset_mapping'][-1][1]
             chunks.append(entity_text[start:end])
 
         return chunks

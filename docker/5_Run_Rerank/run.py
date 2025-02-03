@@ -17,7 +17,7 @@ LANGUAGE = os.getenv("LANGUAGE", 'en')
 QUERY_COL = os.getenv("QUERY_COL")
 RESTART = os.getenv("RESTART", "false").lower() == "true"
 
-textifier = WikidataTextifier(with_claim_aliases=False, with_property_aliases=False, language=LANGUAGE)
+textifier = WikidataTextifier(language=LANGUAGE)
 reranker = JinaAIReranker()
 
 eval_data = pickle.load(open(f"../data/Evaluation Data/{RETRIEVAL_FILENAME}.pkl", "rb"))

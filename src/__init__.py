@@ -1,4 +1,4 @@
-from .wikidata_dumpreader import WikidataDumpReader
+from .wikidataDumpReader import WikidataDumpReader
 from .wikidataDB import WikidataEntity, WikidataID
 from .wikidataLabelsDB import WikidataLabels
 from .wikidataEmbed import WikidataTextifier
