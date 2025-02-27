@@ -1,5 +1,7 @@
 tqdm
-sqlalchemy
 psutil
-transformers
 orjson
+pandas
+
+# wikidataDB
+sqlalchemy

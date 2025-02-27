@@ -32,10 +32,14 @@ def query_similarity(query, api_key_json, k=10):
 
     # Print the results
     for result in results:
+<<<<<<< HEAD
         print()
         print(f"{result.metadata['QID']}:\n{result.page_content}")
 
     return results
+=======
+        print(result.metadata['QID'])
+>>>>>>> 7b13cbe479f5ae8463b3f202faef4038fb1acfc3
 
 if __name__ == "__main__":
     # Set up argument parsing

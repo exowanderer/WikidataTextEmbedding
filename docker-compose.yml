@@ -6,15 +6,11 @@ services:
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
     tty: true
-    deploy:
-      resources:
-        limits:
-          cpus: '12.0'
-
     container_name: data_processing_save_ids
     environment:
-      - PYTHONUNBUFFERED=1
-    cpu_count: 12
+      PYTHONUNBUFFERED: 1
+      LANGUAGE: "de"
+      OFFSET: 0
 
   data_processing_save_entities:
     build:
@@ -23,16 +19,9 @@ services:
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
     tty: true
-    deploy:
-      resources:
-        limits:
-          cpus: '12.0'
-
     container_name: data_processing_save_entities
     environment:
-      - PYTHONUNBUFFERED=1
-    cpu_count: 12
-
+      PYTHONUNBUFFERED: 1
 
   add_wikidata_to_astra:
     build:
@@ -40,7 +29,82 @@ services:
       dockerfile: ./docker/3_Add_Wikidata_to_AstraDB/Dockerfile
     volumes:
       - ./data:/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
     tty: true
     container_name: add_wikidata_to_astra
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: 1
+      MODEL: "jina"
+      SAMPLE: "true"
+      API_KEY: "datastax_wikidata_nvidia.json"
+      EMBED_BATCH_SIZE: 8
+      QUERY_BATCH_SIZE: 1000
+      OFFSET: 2560000
+      COLLECTION_NAME: "wikidata_test_v1"
+      LANGUAGE: 'ar'
+
+  run_retrieval:
+    build:
+      context: .
+      dockerfile: ./docker/4_Run_Retrieval/Dockerfile
+    volumes:
+      - ./data:/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    tty: true
+    container_name: run_retrieval
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    environment:
+      PYTHONUNBUFFERED: 1
+      MODEL: "jina"
+      API_KEY: "datastax_wikidata_nvidia.json"
+      COLLECTION_NAME: "wikidata_test_v1"
+      BATCH_SIZE: 100
+      EVALUATION_PATH: "Mintaka/processed_dataframe_langtest.pkl"
+      # COMPARATIVE: "true"
+      # COMPARATIVE_COLS: "Correct QID,Wrong QID"
+      QUERY_COL: "Question"
+      # QUERY_LANGUAGE: "ar"
+      # DB_LANGUAGE: "en,ar"
+      PREFIX: ""
+      ELASTICSEARCH_URL: "http://localhost:9200"
+    network_mode: "host"
+
+  run_rerank:
+    build:
+      context: .
+      dockerfile: ./docker/5_Run_Rerank/Dockerfile
+    volumes:
+      - ./data:/data
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    tty: true
+    container_name: run_rank
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    environment:
+      PYTHONUNBUFFERED: 1
+      MODEL: "jina"
+      RETRIEVAL_FILENAME: "retrieval_results_Mintaka-wikidata_test_v1-en"
+      BATCH_SIZE: 1
+      QUERY_COL: "Question"
+      LANGUAGE: "de"
+    network_mode: "host"
