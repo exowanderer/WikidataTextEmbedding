@@ -21,8 +21,8 @@ def get_wikidata_label_lang(entity):
     """
     Return the languages supported in this Wikidata entity (label and description)
     """
-    label_langs = set(entity.get('labels', {}).keys())
-    return label_langs
+    wikidata_label_langs = set(entity.get('labels', {}).keys())
+    return wikidata_label_langs
 
 def get_wikidata_descr_lang(entity):
     """
@@ -45,102 +45,85 @@ def get_claims_pids(entity):
                     pids_count[pid] = pids_count.get(pid, 0) +1
     return pids_count
 
-def get_instanceof(entity):
+def get_instance_of(entity):
     """
     Return the instance of QID values
     """
-    instanceof = set()
+    instance_of = set()
     if 'P31' in entity.get('claims', {}):
         for c in entity['claims']['P31']:
             if ('mainsnak' in c) and ('datavalue' in c['mainsnak']):
                 if (c['mainsnak'].get('datatype', '') == 'wikibase-item'):
                     qid = c['mainsnak']['datavalue']['value']['id']
-                    instanceof.add(qid)
-    return instanceof
+                    instance_of.add(qid)
+    return instance_of
 
 
-def calculate_stats(
-    item, item_type_count, wikidatalabellang_counts, wikidatadescrlang_counts,
-    wikipedialang_counts, wikidatalang_counts, wikidatalang_counts_wikionly,
-    claim_counts, claim_counts_wikionly, instanceof_counts,
-    instanceof_counts_wikionly, wikidata_wikipedia_lang_counts):
+def calculate_stats(item, counters):
     """
     Calculate various statistics for a given Wikidata item.
     """
 
     if item is not None:
         id_type = item['id'][0]
-        wikipedialangs = get_wikipedia_lang(item)
+        counters['wikipedia_langs'] = get_wikipedia_lang(item)
 
-        label_langs = get_wikidata_label_lang(item)
+        wikidata_label_langs = get_wikidata_label_lang(item)
         desc_langs = get_wikidata_descr_lang(item)
-        wikidatalangs = label_langs.intersection(desc_langs)
+        wikidatalangs = wikidata_label_langs.intersection(desc_langs)
 
         claimspids = get_claims_pids(item)
-        instanceof = get_instanceof(item)
+        instance_of = get_instance_of(item)
 
         item_type_count[id_type] = item_type_count.get(id_type, 0) +1
 
-
         if id_type == 'Q':
             update_counts(
-                wikipedialangs,
-                label_langs,
+                wikipedia_langs,
+                wikidata_label_langs,
                 desc_langs,
-                wikidatalangs,
-                claimspids,
-                instanceof, 
-                wikipedialang_counts,
-                wikidatalabellang_counts,
-                wikidatadescrlang_counts, 
-                wikidatalang_counts,
-                claim_counts,
-                instanceof_counts, 
-                wikidatalang_counts_wikionly,
-                claim_counts_wikionly, 
-                instanceof_counts_wikionly,wikidata_wikipedia_lang_counts
+                wikidata_langs,
+                claims_pids,
+                instance_of,
+                counters
             )
 
 def update_counts(
-    wikipedialangs: set, label_langs: set, desc_langs: set, wikidatalangs: set, 
-    claimspids: dict, instanceof: set, wikipedialang_counts: dict, 
-    wikidatalabellang_counts: dict, wikidatadescrlang_counts: dict, 
-    wikidatalang_counts: dict, claim_counts: dict, instanceof_counts: dict, 
-    wikidatalang_counts_wikionly: dict, claim_counts_wikionly: dict, 
-    instanceof_counts_wikionly: dict, wikidata_wikipedia_lang_counts: dict
-    ) -> None:
+    wikipedia_langs: set, wikidata_label_langs: set, desc_langs: set,
+    wikidata_langs: set, claims_pids: dict, instance_of: set, 
+    counters: dict) -> None:
 
-        for lang in wikipedialangs:
-            wikipedialang_counts[lang] = wikipedialang_counts.get(lang, 0) +1
+    for lang in wikipedia_langs:
+        wikipedialang_counts[lang] = wikipedialang_counts.get(lang, 0) +1
 
-        for lang in label_langs:
-            wikidatalabellang_counts[lang] = wikidatalabellang_counts.get(lang, 0) +1
-        for lang in desc_langs:
-            wikidatadescrlang_counts[lang] = wikidatadescrlang_counts.get(lang, 0) +1
+    for lang in wikidata_label_langs:
+        wikidatalabellang_counts[lang] = wikidatalabellang_counts.get(lang, 0) +1
+    for lang in desc_langs:
+        wikidatadescrlang_counts[lang] = wikidatadescrlang_counts.get(lang, 0) +1
+
+    for lang in wikidatalangs:
+        wikidatalang_counts[lang] = wikidatalang_counts.get(lang, 0) +1
+
+    for pid, count in claimspids.items():
+        claim_counts[pid] = claim_counts.get(pid, 0) + count
+
+    for qid in instance_of:
+        instance_of_counts[qid] = instance_of_counts.get(qid, 0) +1
+
+    if len(wikipedia_langs) > 0:
+        wikipedialang_counts['total']  = wikipedialang_counts.get('total', 0) +1
 
         for lang in wikidatalangs:
-            wikidatalang_counts[lang] = wikidatalang_counts.get(lang, 0) +1
+            wikidatalang_counts_wikionly[lang] = wikidatalang_counts_wikionly.get(lang, 0) +1
 
         for pid, count in claimspids.items():
-            claim_counts[pid] = claim_counts.get(pid, 0) + count
+            claim_counts_wikionly[pid] = claim_counts_wikionly.get(pid, 0) + count
 
-        for qid in instanceof:
-            instanceof_counts[qid] = instanceof_counts.get(qid, 0) +1
+        for qid in instance_of:
+            instance_of_counts_wikionly[qid] = instance_of_counts_wikionly.get(qid, 0) +1
 
-        if len(wikipedialangs) > 0:
-            wikipedialang_counts['total']  = wikipedialang_counts.get('total', 0) +1
-
-            for lang in wikidatalangs:
-                wikidatalang_counts_wikionly[lang] = wikidatalang_counts_wikionly.get(lang, 0) +1
-
-            for pid, count in claimspids.items():
-                claim_counts_wikionly[pid] = claim_counts_wikionly.get(pid, 0) + count
-
-            for qid in instanceof:
-                instanceof_counts_wikionly[qid] = instanceof_counts_wikionly.get(qid, 0) +1
-
-        for lang in wikidatalangs.intersection(wikipedialangs):
-            wikidata_wikipedia_lang_counts[lang] = wikidata_wikipedia_lang_counts.get(lang, 0) +1
+    for lang in wikidatalangs.intersection(wikipedia_langs):
+        wikidata_wikipedia_lang_counts[lang] = wikidata_wikipedia_lang_counts.get(lang, 0) +1
 
 
 if __name__ == '__main__':
@@ -160,10 +143,44 @@ if __name__ == '__main__':
     # Initialize multiprocessing manager
     multiprocess_manager = Manager()
 
-    # Section: Shared dictionaries for statistics
+    # Shared dictionaries for statistics
+    counter_names [
+        # Per language, count the the items that are connected to the Wikipedia page of the language
+        'wikipedia_lang',
 
-    # Per language, count the the items that are connected to the Wikipedia 
-    # page of the language
+        # Per language, count the the items that have a label supported in the language
+        'wikidata_label_langs',
+
+        # Per language, count the the items that have a description supported in the language
+        'wikidata_descr_lang',
+
+        # Per language, count the the items that have a label and description supported in the language
+        'wikidata_lang',
+
+        # Same as wikidatalang but for items that are connected to a Wikipedia page
+        'wikidata_lang_wikionly',
+
+        # The intersection of wikipedialang and wikidatalang
+        'wikidata_wikipedia_lang',
+
+        # Per claim, count how many times it's been included in an item
+        'claim',
+
+        # Same as claim but for items that are connected to a Wikipedia page
+        'claim_wikionly',
+
+        # Count the distinct values of instance of claim
+        'instance_of',
+
+        # Same as instance_of but for items that are connected to a Wikipedia page
+        'instance_of_wikionly',
+
+        # Number of QIDs vs PIDs vs LIDs...
+        'item_type'
+    ]
+    counters = {cname:multiprocess_manager.dict() for cname in counter_names}
+
+    """
     wikipedialang_counts = multiprocess_manager.dict() 
 
     # Per language, count the the items that have a label supported in the language
@@ -191,14 +208,16 @@ if __name__ == '__main__':
     claim_counts_wikionly = multiprocess_manager.dict() 
 
     # Count the distinct values of instance of claim
-    instanceof_counts = multiprocess_manager.dict() 
+    instance_of_counts = multiprocess_manager.dict() 
 
-    # Same as instanceof_counts but for items that are connected to a Wikipedia page
-    instanceof_counts_wikionly = multiprocess_manager.dict()
+    # Same as instance_of_counts but for items that are connected to a Wikipedia page
+    instance_of_counts_wikionly = multiprocess_manager.dict()
 
     # Number of QIDs vs PIDs vs LIDs...
     item_type_count = multiprocess_manager.dict()
+    """
 
+    # Create a WikidataDumpReader object to process counters
     wikidata = WikidataDumpReader(
         FILEPATH,
         num_processes=NUM_PROCESSES,
@@ -207,19 +226,7 @@ if __name__ == '__main__':
     )
 
     wikidata.run(
-        lambda item: calculate_stats(
-            item, item_type_count,
-            wikidatalabellang_counts,
-            wikidatadescrlang_counts,
-            wikipedialang_counts,
-            wikidatalang_counts,
-            wikidatalang_counts_wikionly,
-            claim_counts,
-            claim_counts_wikionly,
-            instanceof_counts,
-            instanceof_counts_wikionly,
-            wikidata_wikipedia_lang_counts
-        ),
+        lambda item: calculate_stats(item, counters),
         # max_iterations=10000,
         verbose=True
     )
