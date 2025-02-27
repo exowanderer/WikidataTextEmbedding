@@ -1,0 +1,11 @@
+tqdm
+psutil
+orjson
+pandas
+
+# wikidataDB
+sqlalchemy
+
+# wikidataEmbed
+transformers
+einops

@@ -5,3 +5,6 @@ pandas
 
 # wikidataDB
 sqlalchemy
+
+datasets
+huggingface-hub
