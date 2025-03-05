@@ -5,8 +5,22 @@ import sys
 sys.path.append('../src')
 
 from wikidataDumpReader import WikidataDumpReader
-from multiprocessing import Manager, cpu_count
+from multiprocessing import Manager, Queue, Process, cpu_count
 
+def db_writer(db_path, queue):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    while True:
+        item = queue.get()
+        if item is None:
+            break
+
+        query, params = item
+        cursor.execute(query, params)
+        conn.commit()
+
+    conn.close()
 
 def setup_database(db_path):
     conn = sqlite3.connect(db_path)
@@ -136,7 +150,7 @@ def get_instance_of(entity):
     return instance_of
 
 
-def calculate_stats(item, counters, conn=None):
+def calculate_stats(item, counters, queue=None):
     """
     Calculate various statistics for a given Wikidata item.
     """
@@ -152,23 +166,22 @@ def calculate_stats(item, counters, conn=None):
         claims_pids = get_claims_pids(item)
         instance_of = get_instance_of(item)
 
-        cursor = None
-        if conn is not None:
-            cursor = conn.cursor()
-            cursor.execute(
-                'INSERT OR IGNORE INTO item_type (type, count) VALUES (?, 0)', 
+
+        if queue is not None:
+            queue.put((
+                'INSERT OR IGNORE INTO item_type (type,count) VALUES (?,0)',
                 (id_type,)
-            )
-            cursor.execute(
-                'UPDATE item_type SET count = count + 1 WHERE type = ?', 
+            ))
+            queue.put((
+                'UPDATE item_type SET count = count + 1 WHERE type = ?',
                 (id_type,)
-            )
+            ))
 
         item_type_count = counters['item_type']  # temp variable
         counters['item_type'][id_type] = item_type_count.get(id_type, 0) +1
 
         if id_type == 'Q':
-            if cursor is not None:
+            if queue is not None:
                 update_sqldb(
                     wikipedia_langs,
                     wikidata_label_langs,
@@ -176,7 +189,7 @@ def calculate_stats(item, counters, conn=None):
                     wikidata_lbldesc_langs,
                     claims_pids,
                     instance_of,
-                    cursor
+                    queue
                 )
 
             update_counts(
@@ -189,56 +202,135 @@ def calculate_stats(item, counters, conn=None):
                 counters
             )
 
-        conn.commit()
-
 def update_sqldb(
     wikipedia_langs: set, wikidata_label_langs: set, wikidata_desc_langs: set,
     wikidata_langs: set, claims_pids: dict, instance_of: set, 
-    cursor=None) -> None:
+    queue=None) -> None:
 
     for lang in wikipedia_langs:
-        cursor.execute('INSERT OR IGNORE INTO wikipedia_lang (lang, count) VALUES (?, 0)', (lang,))
-        cursor.execute('UPDATE wikipedia_lang SET count = count + 1 WHERE lang = ?', (lang,))
+        queue.put((
+            'INSERT OR IGNORE INTO wikipedia_lang (lang, count) VALUES (?, 0)',
+            (lang,)
+        ))
+        queue.put((
+            'UPDATE wikipedia_lang SET count = count + 1 WHERE lang = ?',
+            (lang,)
+        ))
 
     for lang in wikidata_label_langs:
-        cursor.execute('INSERT OR IGNORE INTO wikidata_label_lang (lang, count) VALUES (?, 0)', (lang,))
-        cursor.execute('UPDATE wikidata_label_lang SET count = count + 1 WHERE lang = ?', (lang,))
+        queue.put((
+            'INSERT OR IGNORE INTO wikidata_label_lang '
+            '(lang, count) VALUES (?, 0)',
+            (lang,)
+        ))
+        queue.put((
+            'UPDATE wikidata_label_lang SET count = count + 1 WHERE lang = ?',
+            (lang,)
+        ))
 
     for lang in wikidata_desc_langs:
-        cursor.execute('INSERT OR IGNORE INTO wikidata_desc_lang (lang, count) VALUES (?, 0)', (lang,))
-        cursor.execute('UPDATE wikidata_desc_lang SET count = count + 1 WHERE lang = ?', (lang,))
+        queue.put((
+            'INSERT OR IGNORE INTO wikidata_desc_lang (lang, count) '
+            'VALUES (?, 0)',
+            (lang,)
+        ))
+        queue.put((
+            'UPDATE wikidata_desc_lang SET count = count + 1 WHERE lang = ?',
+            (lang,)
+        ))
 
     for lang in wikidata_langs:
-        cursor.execute('INSERT OR IGNORE INTO wikidata_lang (lang, count) VALUES (?, 0)', (lang,))
-        cursor.execute('UPDATE wikidata_lang SET count = count + 1 WHERE lang = ?', (lang,))
+        queue.put((
+            'INSERT OR IGNORE INTO wikidata_lang (lang, count) VALUES (?, 0)',
+            (lang,)
+        ))
+
+        queue.put((
+            'UPDATE wikidata_lang SET count = count + 1 WHERE lang = ?',
+            (lang,)
+        ))
 
     for pid, count in claims_pids.items():
-        cursor.execute('INSERT OR IGNORE INTO claim_pid (pid, count) VALUES (?, 0)', (pid,))
-        cursor.execute('UPDATE claim_pid SET count = count + ? WHERE pid = ?', (count, pid,))
+        queue.put((
+            'INSERT OR IGNORE INTO claim_pid (pid, count) VALUES (?, 0)',
+            (pid,)
+        ))
+        queue.put((
+            'UPDATE claim_pid SET count = count + ? WHERE pid = ?',
+            (count, pid,)
+        ))
 
     for qid in instance_of:
-        cursor.execute('INSERT OR IGNORE INTO instance_of (qid, count) VALUES (?, 0)', (qid,))
-        cursor.execute('UPDATE instance_of SET count = count + 1 WHERE qid = ?', (qid,))
+        queue.put((
+            'INSERT OR IGNORE INTO instance_of (qid, count) VALUES (?, 0)', 
+            (qid,)
+        ))
+        queue.put((
+            'UPDATE instance_of SET count = count + 1 WHERE qid = ?',
+            (qid,)
+        ))
 
     if len(wikipedia_langs) > 0:
-        cursor.execute('INSERT OR IGNORE INTO wikipedia_lang (lang, count) VALUES ("total", 0)')
-        cursor.execute('UPDATE wikipedia_lang SET count = count + 1 WHERE lang = "total"')
+        queue.put((
+            'INSERT OR IGNORE INTO wikipedia_lang (lang, count) '
+            'VALUES ("total", 0)',
+            ()
+        ))
+        queue.put((
+            'UPDATE wikipedia_lang SET count = count + 1 WHERE lang = "total"', ()
+        ))
 
         for lang in wikidata_langs:
-            cursor.execute('INSERT OR IGNORE INTO wikidata_lang_wikionly (lang, count) VALUES (?, 0)', (lang,))
-            cursor.execute('UPDATE wikidata_lang_wikionly SET count = count + 1 WHERE lang = ?', (lang,))
+            queue.put((
+                'INSERT OR IGNORE INTO wikidata_lang_wikionly '
+                '(lang, count) VALUES (?, 0)',
+                (lang,)
+            ))
+            queue.put((
+                'UPDATE wikidata_lang_wikionly '
+                'SET count = count + 1 '
+                'WHERE lang = ?',
+                (lang,)
+            ))
 
         for pid, count in claims_pids.items():
-            cursor.execute('INSERT OR IGNORE INTO claim_pid_wikionly (pid, count) VALUES (?, 0)', (pid,))
-            cursor.execute('UPDATE claim_pid_wikionly SET count = count + ? WHERE pid = ?', (count, pid,))
+            queue.put((
+                'INSERT OR IGNORE INTO claim_pid_wikionly '
+                '(pid, count) VALUES (?, 0)',
+                (pid,)
+            ))
+            queue.put((
+                'UPDATE claim_pid_wikionly '
+                'SET count = count + ? '
+                'WHERE pid = ?',
+                (count, pid,)
+            ))
 
         for qid in instance_of:
-            cursor.execute('INSERT OR IGNORE INTO instance_of_wikionly (qid, count) VALUES (?, 0)', (qid,))
-            cursor.execute('UPDATE instance_of_wikionly SET count = count + 1 WHERE qid = ?', (qid,))
+            queue.put((
+                'INSERT OR IGNORE INTO instance_of_wikionly (qid, count) '
+                'VALUES (?, 0)',
+                (qid,)
+            ))
+            queue.put((
+                'UPDATE instance_of_wikionly '
+                'SET count = count + 1 '
+                'WHERE qid = ?',
+                (qid,)
+            ))
 
     for lang in wikidata_langs.intersection(wikipedia_langs):
-        cursor.execute('INSERT OR IGNORE INTO wikidata_wikipedia_lang (lang, count) VALUES (?, 0)', (lang,))
-        cursor.execute('UPDATE wikidata_wikipedia_lang SET count = count + 1 WHERE lang = ?', (lang,))
+        queue.put((
+            'INSERT OR IGNORE INTO wikidata_wikipedia_lang (lang, count) '
+            'VALUES (?, 0)',
+            (lang,)
+        ))
+        queue.put((
+            'UPDATE wikidata_wikipedia_lang '
+            'SET count = count + 1 '
+            'WHERE lang = ?',
+            (lang,)
+        ))
 
 def update_counts(
     wikipedia_langs: set, wikidata_label_langs: set, wikidata_desc_langs: set,
@@ -286,8 +378,9 @@ if __name__ == '__main__':
     sys.path.append('../src')
 
     from wikidataDumpReader import WikidataDumpReader
-    from multiprocessing import Manager, cpu_count
-    from Get_Wikidata_Stats import calculate_stats, setup_database
+    from multiprocessing import Manager, cpu_count, Queue, Process
+
+    from Get_Wikidata_Stats import calculate_stats, setup_database, db_writer
 
     # Set up database
     DB_PATH = 'wikidata_stats.db'
@@ -304,6 +397,13 @@ if __name__ == '__main__':
 
     # Initialize multiprocessing manager
     multiprocess_manager = Manager()
+
+    # Create a queue for database writes
+    db_queue = Queue()
+
+    # Start the database writer process
+    db_writer_process = Process(target=db_writer, args=(DB_PATH, db_queue))
+    db_writer_process.start()
 
     # Shared dictionaries for statistics
     counter_names = [
@@ -388,10 +488,14 @@ if __name__ == '__main__':
     )
 
     wikidata.run(
-        lambda item: calculate_stats(item, counters, conn),
+        lambda item: calculate_stats(item, counters, db_queue),
         # max_iterations=10000,
         verbose=True
     )
+
+    # Signal the database writer process to exit
+    db_queue.put(None)
+    db_writer_process.join()
 
     # Close the database connection
     conn.close()
