@@ -43,6 +43,8 @@ class WikidataTextifier:
             str: Wikidata label from specified language or mul[tilingual].
         """
         if (labels is None) or (len(labels) == 0):
+            # If the labels are not provided, fetch them from the Wikidata SQLDB
+            # TODO: Fetch from the Wikidata API if not found in the SQLDB
             labels = WikidataItem.get_labels(id)
 
         if (type(labels) is str):
