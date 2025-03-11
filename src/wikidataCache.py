@@ -2,13 +2,25 @@ from sqlalchemy import Column, Text, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import TypeDecorator
+
+import os
 import json
 
 """
 SQLite database setup for caching the query embeddings for a faster evaluation process.
 """
+
+# TODO: Move to a configuration file
+wikidata_cache_file = "wikidata_cache.db"
+
+wikidata_cache_dir = "../data/Wikidata"
+wikidata_cache_path = os.path.join(wikidata_cache_dir, wikidata_cache_file)
+
+if not os.path.exists(wikidata_cache_dir):
+    os.makedirs(wikidata_cache_dir)
+
 engine = create_engine(
-    'sqlite:///../data/Wikidata/sqlite_cacheembeddings.db',
+    f'sqlite:///{wikidata_cache_path}',
     pool_size=5,       # Limit the number of open connections
     max_overflow=10,   # Allow extra connections beyond pool_size
     pool_recycle=10    # Recycle connections every 10 seconds
