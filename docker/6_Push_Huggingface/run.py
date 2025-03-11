@@ -7,7 +7,7 @@ from multiprocessing import Process, Value, Queue
 sys.path.append('../src')
 
 from wikidataDumpReader import WikidataDumpReader
-from wikidataLabelsDB import WikidataLabels
+from wikidataItemDB import WikidataItem
 
 from datasets import Dataset, load_dataset_builder
 
@@ -22,8 +22,8 @@ api_key = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))['API_KEY']
 
 def save_to_queue(item, data_queue):
     """Processes and puts cleaned item into the multiprocessing queue."""
-    if (item is not None) and (WikidataLabels.is_in_wikipedia(item)):
-        claims = WikidataLabels.add_labels_batched(item['claims'], query_batch=100)
+    if (item is not None) and (WikidataItem.is_in_wikipedia(item)):
+        claims = WikidataItem.add_labels_batched(item['claims'], query_batch=100)
         data_queue.put({
             'id': item['id'],
             'labels': json.dumps(item['labels'], separators=(',', ':')),
@@ -82,7 +82,7 @@ HF_REPO_ID = "wikidata"  # Change to your actual repo on Hugging Face
 
 login(token=api_key)
 builder = load_dataset_builder("philippesaade/wikidata")
-for i in range(45, 113):
+for i in range(0, 113):
     split_name = f"chunk_{i}"
     if split_name not in builder.info.splits:
         filepath = f"../data/Wikidata/latest-all-chunks/chunk_{i}.json.gz"

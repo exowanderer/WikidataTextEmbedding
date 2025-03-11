@@ -41,7 +41,7 @@ def merge_entity_text(label, description, aliases, properties):
                 'description': description,
                 'aliases': aliases,
                 **properties
-            }, ensure_ascii=False)
+            }, ensure_ascii=False, indent=4)
 
     return text
 
@@ -50,70 +50,19 @@ def compress_json(data):
 
     # Iterate through the items of the data
     for key, items in data.items():
-        cleaned_items = []
-        for item in items:
-            qualifiers = {k: v[0] if isinstance(v, list) and len(v) == 1 else v for k, v in item['qualifiers'].items()}
-            clean_item = {'value': item['value'], **qualifiers}
-            if len(clean_item) == 1:
-                clean_item = clean_item['value']
+        if (items is not None) and (len(items) > 0):
+            cleaned_items = []
+            for item in items:
+                qualifiers = {k: v[0] if isinstance(v, list) and len(v) == 1 else v for k, v in item['qualifiers'].items()}
+                clean_item = {'value': item['value'], **qualifiers}
+                if len(clean_item) == 1:
+                    clean_item = clean_item['value']
 
-            cleaned_items.append(clean_item)
+                cleaned_items.append(clean_item)
 
-        if len(cleaned_items) == 1:
-            cleaned_items = cleaned_items[0]
-        cleaned_data[key] = cleaned_items
+            if len(cleaned_items) == 1:
+                cleaned_items = cleaned_items[0]
+            elif len(cleaned_items) > 1:
+                cleaned_data[key] = cleaned_items
 
     return cleaned_data
-
-def qualifiers_to_text(qualifiers):
-    """
-    Converts a list of qualifiers to a readable text string.
-    Qualifiers provide additional information about a claim.
-
-    Parameters:
-    - qualifiers: A dictionary of qualifiers with property IDs as keys and their values as lists.
-
-    Returns:
-    - A string representation of the qualifiers.
-    """
-    text = ""
-    for property_label, qualifier_values in qualifiers.items():
-        if len(text) > 0:
-            text += f" ; "
-
-        text += f"{property_label}: {', '.join(qualifier_values)}"
-    return text
-
-def properties_to_text(properties, label=""):
-    """
-    Converts a list of properties (claims) to a readable text string.
-
-    Parameters:
-    - properties: A dictionary of properties (claims) with property IDs as keys.
-
-    Returns:
-    - A string representation of the properties and their values.
-    """
-    properties_text = ""
-    for property_label, claim_values in properties.items():
-        if len(claim_values) > 0:
-
-            claims_text = ""
-            qualifier_exists = any([len(claim_value.get('qualifiers', {})) > 0 for claim_value in claim_values])
-            if qualifier_exists:
-                for claim_value in claim_values:
-                    if len(claims_text) > 0:
-                        claims_text += f"\n"
-
-                    claims_text += f"{label}: {property_label}: {claim_value['value']}"
-
-                    qualifiers = claim_value.get('qualifiers', {})
-                    if len(qualifiers) > 0:
-                        claims_text += f" ({qualifiers_to_text(qualifiers)})"
-            else:
-                claims_text = ', '.join([claim_value['value'] for claim_value in claim_values])
-                claims_text = f"{label}: {property_label}: {claims_text}"
-
-            properties_text += f'\n{claims_text}'
-
-    return properties_text

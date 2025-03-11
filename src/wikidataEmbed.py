@@ -1,4 +1,4 @@
-from wikidataDB import WikidataEntity
+from wikidataItemDB import WikidataItem
 import requests
 import time
 import json
@@ -7,7 +7,7 @@ import re
 import importlib
 
 class WikidataTextifier:
-    def __init__(self, language='en'):
+    def __init__(self, language='en', langvar_filename=None):
         """
         Initializes the WikidataTextifier with the specified language.
 
@@ -16,18 +16,61 @@ class WikidataTextifier:
         """
 
         self.language = language
+        langvar_filename = (langvar_filename if langvar_filename is not None else language)
         try:
             # Importing custom functions and variables from a formating python script in the language_variables folder.
-            self.langvar = importlib.import_module(f"language_variables.{language}")
+            self.langvar = importlib.import_module(f"language_variables.{langvar_filename}")
         except Exception as e:
             raise ValueError(f"Language file for '{language}' not found.")
+
+    def get_label(self, id, labels=None):
+        if (labels is None) or (len(labels) == 0):
+            labels = WikidataItem.get_labels(id)
+
+        if (type(labels) is str):
+            return labels
+
+        # Take the label from the language, if missing take it from the multiligual class
+        label = labels[self.language] if (self.language in labels) else (labels['mul'] if ('mul' in labels) else None)
+
+        if type(label) is dict:
+            label = label['value']
+        return label
+
+    def get_description(self, id, descriptions=None):
+        if (descriptions is None) or (len(descriptions) == 0):
+            descriptions = WikidataItem.get_descriptions(id)
+
+        if (type(descriptions) is str):
+            return descriptions
+
+        # Take the description from the language, if missing take it from the multiligual class
+        description = descriptions[self.language] if (self.language in descriptions) else (descriptions['mul'] if ('mul' in descriptions) else None)
+
+        if type(description) is dict:
+            description = description['value']
+        return description
+
+    def get_aliases(self, aliases):
+        if (type(aliases) is list):
+            return aliases
+
+        if aliases is None:
+            return []
+
+        aliases = set()
+        if self.language in aliases:
+            aliases = set([x['value'] for x in aliases[self.language]])
+        if 'mul' in aliases:
+            aliases = aliases | set([x['value'] for x in aliases['mul']])
+        return list(aliases)
 
     def entity_to_text(self, entity, properties=None):
         """
         Converts a Wikidata entity into a human-readable text string.
 
         Parameters:
-        - entity (WikidataEntity): A WikidataEntity object containing entity data (label, description, claims, etc.).
+        - entity: A Wikidata entity object containing entity data (label, description, claims, etc.).
         - properties (dict or None): A dictionary of properties (claims). If None, the properties will be derived from entity.claims.
 
         Returns:
@@ -36,14 +79,23 @@ class WikidataTextifier:
         if properties is None:
             properties = self.properties_to_dict(entity.claims)
 
-        return self.langvar.merge_entity_text(entity.label, entity.description, entity.aliases, properties)
+        label = self.get_label(entity.id, labels=entity.label)
+
+        description = self.get_description(entity.id, descriptions=entity.description)
+        if (description is None) or (len(description) == 0):
+            instanceof = self.get_label('P31')
+            description = properties.get(instanceof, '')
+
+        aliases = self.get_aliases(entity.aliases)
+
+        return self.langvar.merge_entity_text(label, description, aliases, properties)
 
     def properties_to_dict(self, properties):
         """
         Converts a dictionary of properties (claims) into a dict suitable for text generation.
 
         Parameters:
-        - properties (dict): A dictionary of claims keyed by property IDs. 
+        - properties (dict): A dictionary of claims keyed by property IDs.
                              Each value is a list of claim statements for that property.
 
         Returns:
@@ -55,23 +107,30 @@ class WikidataTextifier:
             rank_preferred_found = False
 
             for c in claim:
-                value = self.mainsnak_to_value(c.get('mainsnak', c))
-                qualifiers = self.qualifiers_to_dict(c.get('qualifiers', {}))
-                rank = c.get('rank', 'normal').lower()
+                try:
+                    value = self.mainsnak_to_value(c.get('mainsnak', c))
+                    qualifiers = self.qualifiers_to_dict(c.get('qualifiers', {}))
+                    rank = c.get('rank', 'normal').lower()
 
-                # Only store "normal" ranks. if one "preferred" rank exists, then only store "preferred" ranks.
-                if value:
-                    if ((not rank_preferred_found) and (rank == 'normal')) or (rank == 'preferred'):
-                        if (not rank_preferred_found) and (rank == 'preferred'):
-                            rank_preferred_found = True
-                            p_data = []
+                    if value is None:
+                        p_data = None
+                        break
 
-                        p_data.append({'value': value, 'qualifiers': qualifiers})
+                    elif len(value) > 0:
+                        # If a preferred rank exists, include values that are only preferred. Else include only values that are ranked normal (values with a depricated rank are never included)
+                        if ((not rank_preferred_found) and (rank == 'normal')) or (rank == 'preferred'):
+                            if (not rank_preferred_found) and (rank == 'preferred'):
+                                rank_preferred_found = True
+                                p_data = []
 
-            if len(p_data) > 0:
-                property = WikidataEntity.get_entity(pid)
-                if property:
-                    properties_dict[property.label] = p_data
+                            p_data.append({'value': value, 'qualifiers': qualifiers})
+                except Exception as e:
+                    print(c)
+                    raise e
+
+            label = self.get_label(pid, claim[0].get('mainsnak', {}).get('property-labels'))
+            if label:
+                properties_dict[label] = p_data
 
         return properties_dict
 
@@ -80,7 +139,7 @@ class WikidataTextifier:
         Converts qualifiers into a dictionary suitable for text generation.
 
         Parameters:
-        - qualifiers (dict): A dictionary of qualifiers keyed by property IDs. 
+        - qualifiers (dict): A dictionary of qualifiers keyed by property IDs.
                              Each value is a list of qualifier statements.
 
         Returns:
@@ -92,13 +151,16 @@ class WikidataTextifier:
 
             for q in qualifier:
                 value = self.mainsnak_to_value(q)
-                if value:
+                if value is None:
+                    q_data = None
+                    break
+                elif len(value) > 0:
                     q_data.append(value)
 
-            if len(q_data) > 0:
-                property = WikidataEntity.get_entity(pid)
-                if property:
-                    qualifier_dict[property.label] = q_data
+            label = self.get_label(pid, qualifier[0].get('property-labels'))
+            if label:
+                qualifier_dict[label] = q_data
+
         return qualifier_dict
 
     def mainsnak_to_value(self, mainsnak):
@@ -109,42 +171,55 @@ class WikidataTextifier:
         - mainsnak (dict): A snak object containing the value and datatype information.
 
         Returns:
-        - str or None: A string representation of the value, or None if parsing fails.
+        - str or None: A string representation of the value. If the returned string is empty, the value is discarded from the text, and If None i retured, then the whole property is discarded.
         """
-        if mainsnak.get('snaktype', '') == 'value':
-            if (mainsnak.get('datatype', '') == 'wikibase-item') or (mainsnak.get('datatype', '') == 'wikibase-property'):
-                entity_id = mainsnak['datavalue']['value']['id']
-                entity = WikidataEntity.get_entity(entity_id)
-                if entity is None:
-                    return None
+        # Extract the datavalue
+        snaktype = mainsnak.get('snaktype', 'value')
+        datavalue = mainsnak.get('datavalue')
+        if (datavalue is not None) and (type(datavalue) is not str):
+            datavalue = datavalue.get('value', datavalue)
 
-                text = entity.label
-                return text
-
-            elif mainsnak.get('datatype', '') == 'monolingualtext':
-                return mainsnak['datavalue']['value']['text']
-
-            elif mainsnak.get('datatype', '') == 'string':
-                return mainsnak['datavalue']['value']
-
-            elif mainsnak.get('datatype', '') == 'time':
-                try:
-                    return self.time_to_text(mainsnak['datavalue']['value'])
-                except Exception as e:
-                    print("Error in time formating:", e)
-                    return mainsnak['datavalue']['value']["time"]
-
-            elif mainsnak.get('datatype', '') == 'quantity':
-                try:
-                    return self.quantity_to_text(mainsnak['datavalue']['value'])
-                except Exception as e:
-                    print(e)
-                    return mainsnak['datavalue']['value']['amount']
-
-        elif mainsnak.get('snaktype', '') == 'novalue':
+        # Consider missing values
+        if (snaktype != 'value') or (datavalue is None):
             return self.langvar.novalue
 
-        return None
+        # If the values is based on a language, only consider the language that matched the text representation language.
+        elif (type(datavalue) is dict) and ('language' in datavalue) and (datavalue['language'] != self.language):
+            return ''
+
+        elif (mainsnak.get('datatype', '') == 'wikibase-item') or (mainsnak.get('datatype', '') == 'wikibase-property'):
+            if type(datavalue) is str:
+                return self.get_label(datavalue)
+
+            entity_id = datavalue['id']
+            label = self.get_label(entity_id, datavalue.get('labels'))
+            return label
+
+        elif mainsnak.get('datatype', '') == 'monolingualtext':
+            return datavalue.get('text', datavalue)
+
+        elif mainsnak.get('datatype', '') == 'string':
+            return datavalue
+
+        elif mainsnak.get('datatype', '') == 'time':
+            try:
+                return self.time_to_text(datavalue)
+            except Exception as e:
+                print("Error in time formating:", e)
+                return datavalue["time"]
+
+        elif mainsnak.get('datatype', '') == 'quantity':
+            try:
+                return self.quantity_to_text(datavalue)
+            except Exception as e:
+                print(e)
+                return datavalue['amount']
+
+        elif mainsnak.get('datatype', '') == 'external-id':
+            return None
+
+        else:
+            return ''
 
     def quantity_to_text(self, quantity_data):
         """
@@ -156,6 +231,9 @@ class WikidataTextifier:
         Returns:
         - str: A textual representation of the quantity (e.g., "5 kg").
         """
+        if quantity_data is None:
+            return None
+
         quantity = quantity_data.get('amount')
         unit = quantity_data.get('unit')
 
@@ -164,9 +242,7 @@ class WikidataTextifier:
             unit = None
         else:
             unit_qid = unit.rsplit('/')[-1]
-            entity = WikidataEntity.get_entity(unit_qid)
-            if entity:
-                unit = entity.label
+            unit = self.get_label(unit_qid, quantity_data.get('unit-labels'))
 
         return quantity + (f" {unit}" if unit else "")
 
@@ -180,6 +256,9 @@ class WikidataTextifier:
         Returns:
         - str: A textual representation of the time with appropriate granularity.
         """
+        if time_data is None:
+            return None
+
         time_value = time_data['time']
         precision = time_data['precision']
         calendarmodel = time_data.get('calendarmodel', 'http://www.wikidata.org/entity/Q1985786')
@@ -305,7 +384,7 @@ class WikidataTextifier:
         Splits a text representation of an entity into smaller chunks so that each chunk fits within the token limit of a given tokenizer.
 
         Parameters:
-        - entity (WikidataEntity): The entity to be textified and chunked.
+        - entity: The entity to be textified and chunked.
         - tokenizer: A tokenizer (e.g. from Hugging Face) used to count tokens.
         - max_length (int): The maximum number of tokens allowed per chunk (default is 500).
 

@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../src')
 
-from wikidataRetriever import AstraDBConnect, WikidataKeywordSearch
+from wikidataRetriever import AstraDBConnect, KeywordSearchConnect
 
 import json
 from tqdm import tqdm
@@ -22,8 +22,10 @@ QUERY_COL = os.getenv("QUERY_COL")
 QUERY_LANGUAGE = os.getenv("QUERY_LANGUAGE", 'en')
 DB_LANGUAGE = os.getenv("DB_LANGUAGE", None)
 RESTART = os.getenv("RESTART", "false").lower() == "true"
-ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
 PREFIX = os.getenv("PREFIX", "")
+
+ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+ELASTICSEARCH = os.getenv("ELASTICSEARCH", "false").lower() == "true"
 
 OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-{COLLECTION_NAME}-DB({DB_LANGUAGE})-Query({QUERY_LANGUAGE})"
 # OUTPUT_FILENAME = f"retrieval_results_{EVALUATION_PATH.split('/')[-2]}-keyword-search-{LANGUAGE}"
@@ -38,8 +40,11 @@ if not API_KEY_FILENAME:
     API_KEY_FILENAME = os.listdir("../API_tokens")[0]
 datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
 
-graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=BATCH_SIZE, cache_embeddings=True)
-# graph_store = WikidataKeywordSearch(ELASTICSEARCH_URL)
+if ELASTICSEARCH:
+    graph_store = KeywordSearchConnect(ELASTICSEARCH_URL, index_name=COLLECTION_NAME)
+    OUTPUT_FILENAME += "_bm25"
+else:
+    graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=BATCH_SIZE, cache_embeddings=True)
 
 #Load the Evaluation Dataset
 if not QUERY_COL:

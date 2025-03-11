@@ -1,17 +1,9 @@
-from langchain_astradb import AstraDBVectorStore
-from langchain_core.documents import Document
-from astrapy.info import CollectionVectorServiceOptions
-from transformers import AutoTokenizer
-import requests
-from JinaAI import JinaAIEmbedder
 import time
-from elasticsearch import Elasticsearch
-
-from mediawikiapi import MediaWikiAPI
-from mediawikiapi.config import Config
+import json
+from wikidataCache import create_cache_embedding_model
 
 class AstraDBConnect:
-    def __init__(self, datastax_token, collection_name, model='nvidia', batch_size=8, cache_embeddings=False):
+    def __init__(self, datastax_token, collection_name, model='nvidia', batch_size=8, cache_embeddings=None):
         """
         Initialize the AstraDBConnect object with the corresponding embedding model.
 
@@ -20,8 +12,16 @@ class AstraDBConnect:
         - collection_name (str): Name of the collection (table) where data is stored.
         - model (str): The embedding model to use ("nvidia" or "jina"). Default is 'nvidia'.
         - batch_size (int): Number of documents to accumulate before pushing to AstraDB. Default is 8.
-        - cache_embeddings (bool): Whether to cache embeddings when using the Jina model. Default is False.
+        - cache_embeddings (str): Name of the cache table.
         """
+        from langchain_astradb import AstraDBVectorStore
+        from astrapy.info import CollectionVectorServiceOptions
+        from astrapy import DataAPIClient
+        from multiprocessing import Queue
+
+        from transformers import AutoTokenizer
+        from JinaAI import JinaAIEmbedder, JinaAIAPIEmbedder
+
         ASTRA_DB_APPLICATION_TOKEN = datastax_token['ASTRA_DB_APPLICATION_TOKEN']
         ASTRA_DB_API_ENDPOINT = datastax_token["ASTRA_DB_API_ENDPOINT"]
         ASTRA_DB_KEYSPACE = datastax_token["ASTRA_DB_KEYSPACE"]
@@ -29,8 +29,15 @@ class AstraDBConnect:
         self.batch_size = batch_size
         self.model = model
         self.collection_name = collection_name
-        self.doc_batch = []
-        self.id_batch = []
+        self.doc_batch = Queue()
+
+        self.cache_on = (cache_embeddings is not None)
+        if self.cache_on:
+            self.cache_model = create_cache_embedding_model(cache_embeddings)
+
+        client = DataAPIClient(datastax_token['ASTRA_DB_APPLICATION_TOKEN'])
+        database0 = client.get_database(datastax_token['ASTRA_DB_API_ENDPOINT'])
+        self.graph_store = database0.get_collection(collection_name)
 
         if model == 'nvidia':
             self.tokenizer = AutoTokenizer.from_pretrained('intfloat/e5-large-unsupervised', trust_remote_code=True, clean_up_tokenization_spaces=False)
@@ -41,7 +48,7 @@ class AstraDBConnect:
                 model_name="NV-Embed-QA"
             )
 
-            self.graph_store = AstraDBVectorStore(
+            self.vector_search = AstraDBVectorStore(
                 collection_name=collection_name,
                 collection_vector_service_options=collection_vector_service_options,
                 token=ASTRA_DB_APPLICATION_TOKEN,
@@ -49,13 +56,26 @@ class AstraDBConnect:
                 namespace=ASTRA_DB_KEYSPACE,
             )
         elif model == 'jina':
-            embeddings = JinaAIEmbedder(embedding_dim=1024, cache=cache_embeddings)
-            self.tokenizer = embeddings.tokenizer
+            self.embeddings = JinaAIEmbedder(embedding_dim=1024)
+            self.tokenizer = self.embeddings.tokenizer
             self.max_token_size = 1024
 
-            self.graph_store = AstraDBVectorStore(
+            self.vector_search = AstraDBVectorStore(
                 collection_name=collection_name,
-                embedding=embeddings,
+                embedding=self.embeddings,
+                token=ASTRA_DB_APPLICATION_TOKEN,
+                api_endpoint=ASTRA_DB_API_ENDPOINT,
+                namespace=ASTRA_DB_KEYSPACE,
+            )
+
+        elif model == 'jinaapi':
+            self.embeddings = JinaAIAPIEmbedder(embedding_dim=1024)
+            self.tokenizer = AutoTokenizer.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
+            self.max_token_size = 1024
+
+            self.vector_search = AstraDBVectorStore(
+                collection_name=collection_name,
+                embedding=self.embeddings,
                 token=ASTRA_DB_APPLICATION_TOKEN,
                 api_endpoint=ASTRA_DB_API_ENDPOINT,
                 namespace=ASTRA_DB_KEYSPACE,
@@ -72,36 +92,52 @@ class AstraDBConnect:
         - text (str): The text content of the document.
         - metadata (dict): Additional metadata about the document.
         """
-        doc = Document(page_content=text, metadata=metadata)
-        self.doc_batch.append(doc)
-        self.id_batch.append(id)
+        doc = {
+            '_id': id,
+            'content':text,
+            'metadata':metadata
+        }
+        self.doc_batch.put(doc)
 
         # If we reach the batch size, push the accumulated documents to AstraDB
-        if len(self.doc_batch) >= self.batch_size:
+        if self.doc_batch.qsize() >= self.batch_size:
             self.push_batch()
 
     def push_batch(self):
         """
         Push the current batch of documents to AstraDB for storage.
 
-        Retries automatically if a connection issue occurs, waiting for
-        an active internet connection.
+        Caches the embeddings into a SQLite database.
         """
-        while True:
+        if self.doc_batch.empty():
+            return False
+
+        docs = []
+        for _ in range(self.batch_size):
             try:
-                self.graph_store.add_documents(self.doc_batch, ids=self.id_batch)
-                self.doc_batch = []
-                self.id_batch = []
+                doc = self.doc_batch.get_nowait()
+                cache = self._get_cached_embedding(doc['_id'])
+                if cache is None:
+                    docs.append(doc)
+            except:
                 break
-            except Exception as e:
-                print(e)
-                while True:
-                    try:
-                        response = requests.get("https://www.google.com", timeout=5)
-                        if response.status_code == 200:
-                            break
-                    except Exception as e:
-                        print("Waiting for internet connection...")
+
+        if len(docs) == 0:
+            return False
+
+        vectors = self.embeddings.embed_documents([doc['content'] for doc in docs])
+
+        try:
+            self.graph_store.insert_many(docs, vectors=vectors)
+        except Exception as e:
+            print(e)
+
+        self.cache_model.add_bulk_cache([{
+            'id': docs[i]['_id'],
+            'embedding': json.dumps(vectors[i], separators=(',', ':'))}
+            for i in range(len(docs))])
+
+        return True
 
     def get_similar_qids(self, query, filter={}, K=50):
         """
@@ -117,21 +153,10 @@ class AstraDBConnect:
           where list_of_qids are the QIDs of the results and
           list_of_scores are the corresponding similarity scores.
         """
-        while True:
-            try:
-                results = self.graph_store.similarity_search_with_relevance_scores(query, k=K, filter=filter)
-                qid_results = [r[0].metadata['QID'] for r in results]
-                score_results = [r[1] for r in results]
-                return qid_results, score_results
-            except Exception as e:
-                print(e)
-                while True:
-                    try:
-                        response = requests.get("https://www.google.com", timeout=5)
-                        if response.status_code == 200:
-                            break
-                    except Exception as e:
-                        time.sleep(5)
+        results = self.vector_search.similarity_search_with_relevance_scores(query, k=K, filter=filter)
+        qid_results = [r[0].metadata['QID']+"_"+r[0].metadata.get('Language', '') for r in results]
+        score_results = [r[1] for r in results]
+        return qid_results, score_results
 
     def batch_retrieve_comparative(self, queries_batch, comparative_batch, K=50, Language=None):
         """
@@ -186,7 +211,33 @@ class AstraDBConnect:
         qids, scores = zip(*results)
         return list(qids), list(scores)
 
-class WikidataKeywordSearch:
+    def _cache_embedding(self, id, embedding):
+        """
+        Caches the text and its embedding in the SQLite database.
+
+        Parameters:
+        - text (str): The text string.
+        - embedding (List[float]): The embedding vector for the text.
+        """
+        if self.cache_on:
+            embedding = embedding.tolist()
+            self.cache_model.add_cache(id=id, embedding=embedding)
+
+    def _get_cached_embedding(self, id):
+        """
+        Retrieves a previously cached embedding for the specified text.
+
+        Parameters:
+        - text (str): The text string.
+
+        Returns:
+        - List[float] or None: The embedding if found in cache, otherwise None.
+        """
+        if self.cache_on:
+            return self.cache_model.get_cache(id=id)
+        return None
+
+class KeywordSearchConnect:
     def __init__(self, url, index_name = 'wikidata'):
         """
         Initialize the WikidataKeywordSearch object with an Elasticsearch instance.
@@ -195,97 +246,151 @@ class WikidataKeywordSearch:
         - url (str): URL (host) of the Elasticsearch server.
         - index_name (str): Name of the Elasticsearch index. Default is 'wikidata'.
         """
+        from elasticsearch import Elasticsearch
+
         self.index_name = index_name
         self.es = Elasticsearch(url)
+        self.create_index()
 
-        # Create the index if it doesn't already exist
+    def create_index(self):
+        """
+        Create the index with appropriate settings and mappings to optimize search.
+        """
         if not self.es.indices.exists(index=self.index_name):
             self.es.indices.create(index=self.index_name, body={
-            "mappings": {
-                "properties": {
-                    "text": {
-                        "type": "text"
+                "settings": {
+                    "analysis": {
+                        "analyzer": {
+                            "rebuilt_standard": {
+                                "tokenizer": "standard",
+                                "filter": ["lowercase", "stop"]
+                            }
+                        }
+                    }
+                },
+                "mappings": {
+                    "properties": {
+                        "text": {
+                            "type": "text",
+                            "analyzer": "default"
+                        },
+                        "metadata": {
+                            "type": "object",
+                            "properties": {
+                                "QID": {"type": "keyword"},
+                                "Language": {"type": "keyword"},
+                                "Date": {"type": "keyword"}
+                            }
+                        }
                     }
                 }
-            }
-        })
+            })
+
+    def add_document(self, id, text, metadata):
+        """
+        Add a document to the Elasticsearch index.
+        """
+        doc = {
+            'text': text,
+            'metadata': {'QID': metadata['QID'], 'Language': metadata['Language']}
+        }
+        try:
+            if self.es.exists(index=self.index_name, id=id):
+                return
+            self.es.index(index=self.index_name, id=id, body=doc)
+        except ConnectionError as e:
+            print("Connection error:", e)
+            time.sleep(1)
+
+    def push_batch(self):
+        pass
 
     def search(self, query, K=50):
         """
-        Perform a keyword-based search against the Elasticsearch index.
+        Perform a text search using Elasticsearch.
+        """
+        search_body = {
+            "query": {
+                "match": {
+                    "text": query
+                }
+            },
+            "size": K
+        }
+        try:
+            response = self.es.search(index=self.index_name, body=search_body)
+            return [hit for hit in response['hits']['hits']]
+        except ConnectionError as e:
+            print("Connection error:", e)
+            return []
 
-        Parameters:
-        - query (str): The query string to match against document text.
-        - K (int): Number of top results to return. Default is 50.
-
-        Returns:
-        - list: A list of raw Elasticsearch hits, each containing a '_score' and '_source'.
+    def get_similar_qids(self, query, filter=[], K=50):
+        """
+        Retrieve documents based on similarity to a query, potentially with filtering.
         """
         search_body = {
             "query": {
                 "bool": {
-                    "should": [
-                        {
-                            "match": {
-                                "text": {
-                                    "query": query,
-                                    "operator": "or",
-                                    "boost": 1.0
-                                }
-                            }
-                        },
-                        {
-                            "match_all": {
-                                "boost": 0.01  # Lower boost to make match_all results less relevant
-                            }
+                    "must": {
+                        "match": {
+                            "text": query
                         }
-                    ]
+                    },
+                    "filter": filter
                 }
             },
-            "size": K,
-            "sort": [
-                {
-                    "_score": {
-                        "order": "desc"
-                    }
-                }
-            ]
+            "size": K
         }
-        response = self.es.search(index=self.index_name, body=search_body)
-        return [hit for hit in response['hits']['hits']]
+        try:
+            response = self.es.search(index=self.index_name, body=search_body)
+            qid_results = [hit['_source']['metadata']['QID'] for hit in response['hits']['hits']]
+            score_results = [hit['_score'] for hit in response['hits']['hits']]
+            return qid_results, score_results
 
-    def get_similar_qids(self, query, filter_qid={}, K=50):
+        except Exception as e:
+            print("Search failed:", e)
+            return []
+
+    def batch_retrieve_comparative(self, queries_batch, comparative_batch, K=50, Language=None):
         """
-        Retrieve QIDs based on a keyword-based search. Optionally filter by QID.
-
-        Parameters:
-        - query (str): The search string.
-        - filter_qid (dict): Optional filter (currently unused, placeholder).
-        - K (int): Number of top results to return. Default is 50.
-
-        Returns:
-        - tuple: (list_of_qids, list_of_scores)
+        Retrieve similar documents in a comparative fashion for each query and comparative item.
         """
-        results = self.search(query, K=K)
-        qid_results = [r['_id'].split("_")[0] for r in results]
-        score_results = [r['_score'] for r in results]
-        return qid_results, score_results
+        qids = [[] for _ in range(len(queries_batch))]
+        scores = [[] for _ in range(len(queries_batch))]
 
-    def batch_retrieve(self, queries_batch, K=50):
+        for i, query in enumerate(queries_batch):
+            for comp_col in comparative_batch.columns:
+                filter = []
+                # Apply language filter if specified
+                if Language:
+                    filter.append({"term": {"metadata.Language": Language}})
+                # Apply QID filter specific to the comparative group
+                qid_filter = comparative_batch[comp_col].iloc[i]
+                filter.append({"term": {"metadata.QID": qid_filter}})
+
+                result_qids, result_scores = self.get_similar_qids(query, filter=filter, K=K)
+                qids[i].extend(result_qids)
+                scores[i].extend(result_scores)
+
+        return qids, scores
+
+    def batch_retrieve(self, queries_batch, K=50, Language=None):
         """
-        Perform keyword-based search for a batch of queries.
-
-        Parameters:
-        - queries_batch (pd.Series or list): A list or series of query strings.
-        - K (int): Number of top results to return for each query. Default is 50.
-
-        Returns:
-        - tuple: (list_of_qid_lists, list_of_score_lists), each element corresponding to a single query.
+        Perform batch searches and handle potential connection issues.
         """
-        results = [
-            self.get_similar_qids(queries_batch.iloc[i], K=K)
-            for i in range(len(queries_batch))
-        ]
+        filter = []
+        if Language:
+            languages = Language.split(',')
+            filter.append({"bool": {"should": [{"term": {"metadata.Language": lang}} for lang in languages]}})
 
-        qids, scores = zip(*results)
+        results = []
+        for query in queries_batch:
+            try:
+                result = self.get_similar_qids(query, K=K, filter=filter)
+                results.append(result)
+            except ConnectionError as e:
+                print("Connection error during batch processing:", e)
+                time.sleep(1)
+
+        qids, scores = zip(*results) if results else ([], [])
         return list(qids), list(scores)
