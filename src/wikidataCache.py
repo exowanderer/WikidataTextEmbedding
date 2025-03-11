@@ -16,8 +16,14 @@ wikidata_cache_file = "wikidata_cache.db"
 wikidata_cache_dir = "../data/Wikidata"
 wikidata_cache_path = os.path.join(wikidata_cache_dir, wikidata_cache_file)
 
-if not os.path.exists(wikidata_cache_dir):
-    os.makedirs(wikidata_cache_dir)
+try:
+    if not os.path.exists(wikidata_cache_dir):
+        os.makedirs(wikidata_cache_dir)
+except OSError as e:
+    print(f"Error creating directory {wikidata_cache_dir}: {e}")
+
+assert(os.path.exists(wikidata_cache_dir)), \
+    f"Error creating directory {wikidata_cache_dir}"
 
 engine = create_engine(
     f'sqlite:///{wikidata_cache_path}',

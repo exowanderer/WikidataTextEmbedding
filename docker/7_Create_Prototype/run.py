@@ -48,8 +48,8 @@ FILEPATH = f"../data/Wikidata/chunks/chunk_{CHUNK_NUM}.json.gz"
 # TODO: Sync data format from DATADUMP to chunk_sizes.json
 # TODO: Retrieve info from Hugging Face instead of storing it
 wikidata_chunk_sizes_path = os.path.join(
-    "docker",
-    "7_Create_Prototype",
+    # "docker",
+    # "7_Create_Prototype",
     "wikidata_chunk_sizes_2024-09-18.json"
 )
 
