@@ -110,7 +110,6 @@ class WikidataTextifier:
         if aliases is None:
             return []
 
-
         # Combine the aliases from the specified language and the
         # multilingual class. Use set format to avoid duplicates.
         aliases = set()
@@ -193,7 +192,10 @@ class WikidataTextifier:
                         break
 
                     elif len(value) > 0:
-                        # If a preferred rank exists, include values that are only preferred. Else include only values that are ranked normal (values with a depricated rank are never included)
+                        # If a preferred rank exists, include values that are
+                        # only preferred. Else include only values that are
+                        # ranked normal (values with a depricated rank are
+                        # never included)
                         if ((not rank_preferred_found) and (rank == 'normal')) or (rank == 'preferred'):
                             if (not rank_preferred_found) and (rank == 'preferred'):
                                 rank_preferred_found = True
