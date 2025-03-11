@@ -136,8 +136,10 @@ class WikidataTextifier:
             (str): A human-readable representation of the entity, its description, aliases, and claims.
         """
         if properties is None:
+            # If properties are not provided, fetch them from the entity
             properties = self.properties_to_dict(entity.claims)
 
+        # Get the label, description, and aliases for the entity
         label = self.get_label(entity.id, labels=entity.label)
 
         description = self.get_description(
@@ -145,12 +147,19 @@ class WikidataTextifier:
             descriptions=entity.description
         )
         if (description is None) or (len(description) == 0):
+            # If the description is missing, try to get it
+            # from the `instance_of` property
             instanceof = self.get_label('P31')
             description = properties.get(instanceof, '')
 
         aliases = self.get_aliases(entity.aliases)
 
-        return self.langvar.merge_entity_text(label, description, aliases, properties)
+        return self.langvar.merge_entity_text(
+            label,
+            description,
+            aliases,
+            properties
+        )
 
     def properties_to_dict(self, properties):
         """
