@@ -47,18 +47,25 @@ class WikidataTextifier:
             # TODO: Fetch from the Wikidata API if not found in the SQLDB
             labels = WikidataItem.get_labels(id)
 
-        if (type(labels) is str):
+        if isinstance(labels, str):
+            # If the labels are a string, return them as is
             return labels
 
-        # Take the label from the language, if missing take it from the multiligual class
-        label = labels[self.language] if (self.language in labels) else (labels['mul'] if ('mul' in labels) else None)
+        # Take the label from the language, if missing take it 
+        # from the multiligual class
 
-        if type(label) is dict:
-            label = label['value']
+        label = labels.get(self.language)
+        if label is None:
+            label = labels.get('mul')
+
+        if isinstance(label, dict):
+            label = label.get('value')
+
         return label
 
     def get_description(self, id, descriptions=None):
-        """Retrieves the description for a Wikidata entity in the specified language.
+        """Retrieves the description for a Wikidata entity 
+            in the specified language.
 
         Args:
             id (str): QID or PID from the ID column in the Wikidata db or JSON.
@@ -68,18 +75,25 @@ class WikidataTextifier:
             str: Wikidata description from specified language or mul[tilingual].
         """
         if (descriptions is None) or (len(descriptions) == 0):
+            # If the descriptions are not provided, fetch them from the Wikidata SQLDB
+            # TODO: Fetch from the Wikidata API if not found in the SQLDB
             descriptions = WikidataItem.get_descriptions(id)
 
-        if (type(descriptions) is str):
+        if isinstance(descriptions, str):
             return descriptions
+
 
         # Take the description from the language,
         # if missing take it from the multiligual class
-        description = descriptions[self.language] if (self.language in descriptions) else (descriptions['mul'] if ('mul' in descriptions) else None)
+        description = descriptions.get(self.language)
+        if description is None:
+            description = descriptions.get('mul')
 
-        if type(description) is dict:
-            description = description['value']
+        if isinstance(description, dict):
+            description = description.get('value')
+
         return description
+
 
     def get_aliases(self, aliases):
         """Retrieves the aliases for a Wikidata entity in the specified language.
@@ -96,11 +110,16 @@ class WikidataTextifier:
         if aliases is None:
             return []
 
+
+        # Combine the aliases from the specified language and the
+        # multilingual class. Use set format to avoid duplicates.
         aliases = set()
         if self.language in aliases:
-            aliases = set([x['value'] for x in aliases[self.language]])
+            aliases.update([x['value'] for x in aliases[self.language]])
+
         if 'mul' in aliases:
-            aliases = aliases | set([x['value'] for x in aliases['mul']])
+            aliases.update([x['value'] for x in aliases['mul']])
+
         return list(aliases)
 
     def entity_to_text(self, entity, properties=None):
