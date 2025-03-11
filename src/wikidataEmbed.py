@@ -7,6 +7,8 @@ import re
 import importlib
 
 class WikidataTextifier:
+    """_summary_
+    """
     def __init__(self, language='en', langvar_filename=None):
         """
         Initializes the WikidataTextifier with the specified language.
@@ -69,7 +71,8 @@ class WikidataTextifier:
         if (type(descriptions) is str):
             return descriptions
 
-        # Take the description from the language, if missing take it from the multiligual class
+        # Take the description from the language,
+        # if missing take it from the multiligual class
         description = descriptions[self.language] if (self.language in descriptions) else (descriptions['mul'] if ('mul' in descriptions) else None)
 
         if type(description) is dict:
@@ -77,6 +80,14 @@ class WikidataTextifier:
         return description
 
     def get_aliases(self, aliases):
+        """Retrieves the aliases for a Wikidata entity in the specified language.
+
+        Args:
+            aliases (dict, optional): Wikidata aliases in all available languages, else None. Defaults to None.
+
+        Returns:
+            list: Wikidata aliases from specified language and mul[tilingual].
+        """
         if (type(aliases) is list):
             return aliases
 
@@ -91,22 +102,27 @@ class WikidataTextifier:
         return list(aliases)
 
     def entity_to_text(self, entity, properties=None):
-        """
-        Converts a Wikidata entity into a human-readable text string.
+        """Converts a Wikidata entity into a human-readable text string.
 
-        Parameters:
-        - entity: A Wikidata entity object containing entity data (label, description, claims, etc.).
-        - properties (dict or None): A dictionary of properties (claims). If None, the properties will be derived from entity.claims.
+        Args:
+            entity (obj):  A Wikidata entity object containing
+                entity data (label, description, claims, etc.)
+            properties (dict or None, optional): A dictionary of
+                properties (claims). If None, the properties will be derived
+                from entity.claims. Defaults to None.
 
         Returns:
-        - str: A human-readable representation of the entity, its description, aliases, and claims.
+            (str): A human-readable representation of the entity, its description, aliases, and claims.
         """
         if properties is None:
             properties = self.properties_to_dict(entity.claims)
 
         label = self.get_label(entity.id, labels=entity.label)
 
-        description = self.get_description(entity.id, descriptions=entity.description)
+        description = self.get_description(
+            entity.id,
+            descriptions=entity.description
+        )
         if (description is None) or (len(description) == 0):
             instanceof = self.get_label('P31')
             description = properties.get(instanceof, '')
