@@ -61,37 +61,34 @@ def process_items(queue, progress_bar):
         item_description = textifier.get_description(item_id, json.loads(item['descriptions']))
         item_aliases = textifier.get_aliases(json.loads(item['aliases']))
 
-        if item_label is None:
-            continue
+        if item_label is not None:
+            entity_obj = SimpleNamespace()
+            entity_obj.id = item_id
+            entity_obj.label = item_label
+            entity_obj.description = item_description
+            entity_obj.aliases = item_aliases
+            entity_obj.claims = json.loads(item['claims'])
 
-        entity_obj = SimpleNamespace()
-        entity_obj.id = item_id
-        entity_obj.label = item_label
-        entity_obj.description = item_description
-        entity_obj.aliases = item_aliases
-        entity_obj.claims = json.loads(item['claims'])
+            chunks = textifier.chunk_text(entity_obj, graph_store.tokenizer, max_length=graph_store.max_token_size)
 
-        chunks = textifier.chunk_text(entity_obj, graph_store.tokenizer, max_length=graph_store.max_token_size)
+            for chunk_i, chunk in enumerate(chunks):
+                md5_hash = hashlib.md5(chunk.encode('utf-8')).hexdigest()
+                metadata = {
+                    "MD5": md5_hash,
+                    "Label": item_label,
+                    "Description": item_description,
+                    "Aliases": item_aliases,
+                    "Date": datetime.now().isoformat(),
+                    "QID": item_id,
+                    "ChunkID": chunk_i + 1,
+                    "Language": LANGUAGE,
+                    "IsItem": ('Q' in item_id),
+                    "IsProperty": ('P' in item_id),
+                    "DumpDate": DUMPDATE
+                }
+                graph_store.add_document(id=f"{item_id}_{LANGUAGE}_{chunk_i+1}", text=chunk, metadata=metadata)
 
-        for chunk_i, chunk in enumerate(chunks):
-            md5_hash = hashlib.md5(chunk.encode('utf-8')).hexdigest()
-            metadata = {
-                "MD5": md5_hash,
-                "Label": item_label,
-                "Description": item_description,
-                "Aliases": item_aliases,
-                "Date": datetime.now().isoformat(),
-                "QID": item_id,
-                "ChunkID": chunk_i + 1,
-                "Language": LANGUAGE,
-                "IsItem": ('Q' in item_id),
-                "IsProperty": ('P' in item_id),
-                "DumpDate": DUMPDATE
-            }
-            graph_store.add_document(id=f"{item_id}_{LANGUAGE}_{chunk_i+1}", text=chunk, metadata=metadata)
-
-        with progress_bar.get_lock():  # Update tqdm safely from multiple processes
-            progress_bar.value += 1
+        progress_bar.value += 1
 
     while True:
         if not graph_store.push_batch():  # Stop when batch is empty
