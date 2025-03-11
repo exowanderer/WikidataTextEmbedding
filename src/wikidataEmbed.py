@@ -154,6 +154,8 @@ class WikidataTextifier:
 
         aliases = self.get_aliases(entity.aliases)
 
+        # Merge the label, description, aliases, and properties into a single
+        # text string as the Data Model per language through langvar descriptors
         return self.langvar.merge_entity_text(
             label,
             description,
@@ -167,10 +169,11 @@ class WikidataTextifier:
 
         Parameters:
         - properties (dict): A dictionary of claims keyed by property IDs.
-                             Each value is a list of claim statements for that property.
+            Each value is a list of claim statements for that property.
 
         Returns:
-        - dict: A dictionary mapping property labels to a list of their parsed values (and qualifiers).
+        - dict: A dictionary mapping property labels to a list of
+            their parsed values (and qualifiers).
         """
         properties_dict = {}
         for pid, claim in properties.items():
@@ -180,7 +183,9 @@ class WikidataTextifier:
             for c in claim:
                 try:
                     value = self.mainsnak_to_value(c.get('mainsnak', c))
-                    qualifiers = self.qualifiers_to_dict(c.get('qualifiers', {}))
+                    qualifiers = self.qualifiers_to_dict(
+                        c.get('qualifiers', {})
+                    )
                     rank = c.get('rank', 'normal').lower()
 
                     if value is None:
