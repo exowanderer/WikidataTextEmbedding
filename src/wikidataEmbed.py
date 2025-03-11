@@ -10,20 +10,36 @@ class WikidataTextifier:
     def __init__(self, language='en', langvar_filename=None):
         """
         Initializes the WikidataTextifier with the specified language.
+        Expected use cases: Hugging Face parquet or sqlite database.
 
         Parameters:
-        - language (str): The language code used by the textifier (default is "en").
+        - language (str): The language code used by the textifier
+            Default is "en".
         """
 
         self.language = language
-        langvar_filename = (langvar_filename if langvar_filename is not None else language)
+        langvar_filename = (
+            langvar_filename if langvar_filename is not None else language
+        )
         try:
-            # Importing custom functions and variables from a formating python script in the language_variables folder.
-            self.langvar = importlib.import_module(f"language_variables.{langvar_filename}")
+            # Importing custom functions and variables
+            # from a formating python script in the language_variables folder.
+            self.langvar = importlib.import_module(
+                f"language_variables.{langvar_filename}"
+            )
         except Exception as e:
             raise ValueError(f"Language file for '{language}' not found.")
 
     def get_label(self, id, labels=None):
+        """Retrieves the label for a Wikidata entity in a specified language.
+
+        Args:
+            id (str): QID or PID from the ID column in the Wikidata db or JSON.
+            labels (dict, optional): Wikidata labels in all available languages, else None. Defaults to None.
+
+        Returns:
+            str: Wikidata label from specified language or mul[tilingual].
+        """
         if (labels is None) or (len(labels) == 0):
             labels = WikidataItem.get_labels(id)
 
@@ -38,6 +54,15 @@ class WikidataTextifier:
         return label
 
     def get_description(self, id, descriptions=None):
+        """Retrieves the description for a Wikidata entity in the specified language.
+
+        Args:
+            id (str): QID or PID from the ID column in the Wikidata db or JSON.
+            descriptions (dict, optional): Wikidata descriptions in all available languages, else None. Defaults to None.
+
+        Returns:
+            str: Wikidata description from specified language or mul[tilingual].
+        """
         if (descriptions is None) or (len(descriptions) == 0):
             descriptions = WikidataItem.get_descriptions(id)
 
