@@ -120,17 +120,25 @@ class AstraDBConnect:
                 if cache is None:
                     docs.append(doc)
             except:
+                # Queue is empty
                 break
 
         if len(docs) == 0:
             return False
 
-        vectors = self.embeddings.embed_documents([doc['content'] for doc in docs])
-
         try:
+            vectors = self.embeddings.embed_documents(
+                [doc['content'] for doc in docs]
+            )
             self.graph_store.insert_many(docs, vectors=vectors)
         except Exception as e:
             print(e)
+
+            # Put the documents back in the Queue and try again later.
+            for doc in docs:
+                self.doc_batch.put(doc)
+
+            return False
 
         self.cache_model.add_bulk_cache([{
             'id': docs[i]['_id'],
@@ -138,6 +146,11 @@ class AstraDBConnect:
             for i in range(len(docs))])
 
         return True
+
+    def push_all(self):
+        while True:
+            if not self.push_batch():  # Stop when batch is empty
+                break
 
     def get_similar_qids(self, query, filter={}, K=50):
         """
