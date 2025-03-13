@@ -1,19 +1,16 @@
-# TODO: package with setup inside docker to avoid sys.path mods
-import sys
-sys.path.append('../src')
-
-from wikidataEmbed import WikidataTextifier
-from wikidataRetriever import AstraDBConnect
-from datasets import load_dataset
-from multiprocessing import Process, Queue, Manager
-
 import json
-from tqdm import tqdm
 import os
-from datetime import datetime
 import hashlib
-from types import SimpleNamespace
 import time
+
+from datasets import load_dataset
+from datetime import datetime
+from multiprocessing import Process, Queue, Manager
+from tqdm import tqdm
+from types import SimpleNamespace
+
+from src.wikidataEmbed import WikidataTextifier
+from src.wikidataRetriever import AstraDBConnect
 
 MODEL = os.getenv("MODEL", "jinaapi")
 NUM_PROCESSES = int(os.getenv("NUM_PROCESSES", 4))
@@ -27,8 +24,9 @@ COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 
 CHUNK_NUM = os.getenv("CHUNK_NUM")
 
-assert(CHUNK_NUM is not None), \
+assert CHUNK_NUM is not None, (
     "Please provide `CHUNK_NUM` env var at docker run"
+)
 
 LANGUAGE = "en"
 TEXTIFIER_LANGUAGE = "en"
@@ -47,13 +45,9 @@ FILEPATH = f"../data/Wikidata/chunks/chunk_{CHUNK_NUM}.json.gz"
 # TODO: Add location as env var
 # TODO: Sync data format from DATADUMP to chunk_sizes.json
 # TODO: Retrieve info from Hugging Face instead of storing it
-wikidata_chunk_sizes_path = os.path.join(
-    # "docker",
-    # "7_Create_Prototype",
-    "wikidata_chunk_sizes_2024-09-18.json"
-)
+wikidata_chunksizes_path = os.path.join("wikidata_chunk_sizes_2024-09-18.json")
 
-with open(wikidata_chunk_sizes_path) as json_in:
+with open(wikidata_chunksizes_path) as json_in:
     chunk_sizes = json.load(json_in)
 
 total_entities = chunk_sizes[f"chunk_{CHUNK_NUM}"]
@@ -67,6 +61,7 @@ dataset = load_dataset(
     streaming=True,
     split="train"
 )
+
 
 def process_items(queue, progress_bar):
     """Worker function that processes items from the queue
@@ -143,6 +138,7 @@ def process_items(queue, progress_bar):
         # Leftover Maintenance: Ensure that the batch is emptied out
         if not graph_store.push_batch():  # Stop when batch is empty
             break
+
 
 if __name__ == "__main__":
     queue = Queue(maxsize=QUEUE_SIZE)
