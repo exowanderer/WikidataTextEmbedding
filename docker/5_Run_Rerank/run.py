@@ -4,7 +4,8 @@ import os
 import pickle
 
 # BUG: Reviwer assumed wikidataDB was converted to wikidataLangDB
-# Bug: Reviwer assumed WikidataEntity was converted to WikidataLang
+# Bug: Reviwer assumed wikidataDB.WikidataEntity was converted
+#   to wikidataLangDB.WikidataLang
 # from src.wikidataDB import WikidataEntity
 from src.wikidataLangDB import WikidataLang
 from src.wikidataEmbed import WikidataTextifier
