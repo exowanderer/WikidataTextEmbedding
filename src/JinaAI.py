@@ -3,11 +3,11 @@ import requests
 import numpy as np
 import base64
 
-import torch  # torch no long imported
+# import torch  # torch no long imported
 
 
 from typing import List
-from wikidataCache import create_cache_embedding_model
+from src.wikidataCache import create_cache_embedding_model
 
 
 class JinaAIEmbedder:

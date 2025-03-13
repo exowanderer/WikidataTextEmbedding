@@ -1,6 +1,6 @@
-import torch
+# import torch
 # import torch.nn.functional as F
-from JinaAI import JinaAIEmbedder
+from src.JinaAI import JinaAIEmbedder
 
 model = JinaAIEmbedder()
 

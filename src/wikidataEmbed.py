@@ -1,10 +1,11 @@
-from wikidataItemDB import WikidataItem
 import requests
 import time
 import json
-from datetime import date, datetime
 import re
 import importlib
+
+from datetime import date, datetime
+from src.wikidataItemDB import WikidataItem
 
 class WikidataTextifier:
     """_summary_
@@ -27,7 +28,7 @@ class WikidataTextifier:
             # Importing custom functions and variables
             # from a formating python script in the language_variables folder.
             self.langvar = importlib.import_module(
-                f"language_variables.{langvar_filename}"
+                f"src.language_variables.{langvar_filename}"
             )
         except Exception as e:
             raise ValueError(f"Language file for '{language}' not found.")

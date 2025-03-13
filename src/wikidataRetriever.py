@@ -1,6 +1,6 @@
 import time
 import json
-from wikidataCache import create_cache_embedding_model
+from src.wikidataCache import create_cache_embedding_model
 
 class AstraDBConnect:
     def __init__(self, datastax_token, collection_name, model='jina', batch_size=8, cache_embeddings=None):
@@ -20,7 +20,7 @@ class AstraDBConnect:
         from multiprocessing import Queue
 
         from transformers import AutoTokenizer
-        from JinaAI import JinaAIEmbedder, JinaAIAPIEmbedder
+        from src.JinaAI import JinaAIEmbedder, JinaAIAPIEmbedder
 
         ASTRA_DB_APPLICATION_TOKEN = datastax_token['ASTRA_DB_APPLICATION_TOKEN']
         ASTRA_DB_API_ENDPOINT = datastax_token["ASTRA_DB_API_ENDPOINT"]
