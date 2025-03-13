@@ -1,6 +1,3 @@
-# import sys
-# sys.path.append('../src')
-
 from multiprocessing import Manager
 import os
 import time
