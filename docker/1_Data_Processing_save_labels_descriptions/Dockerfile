@@ -17,10 +17,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
 COPY ./docker/1_Data_Processing_save_labels_descriptions /app
-COPY ./src /app/src
+COPY ./src /src
 
 # Set up the volume for the data folder
 VOLUME [ "/data" ]
+
+ENV PYTHONPATH="${PYTHONPATH}:/src"
 
 # Run the Python script
 CMD ["python", "run.py"]
