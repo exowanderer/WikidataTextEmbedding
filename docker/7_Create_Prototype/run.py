@@ -48,8 +48,17 @@ dataset = load_dataset(
 def process_items(queue, progress_bar):
     """Worker function that processes items from the queue and adds them to AstraDB."""
     datastax_token = json.load(open(f"../API_tokens/{DB_API_KEY_FILENAME}"))
-    graph_store = AstraDBConnect(datastax_token, COLLECTION_NAME, model=MODEL, batch_size=EMBED_BATCH_SIZE, cache_embeddings="wikidata_prototype")
-    textifier = WikidataTextifier(language=LANGUAGE, langvar_filename=TEXTIFIER_LANGUAGE)
+    graph_store = AstraDBConnect(
+        datastax_token,
+        COLLECTION_NAME,
+        model=MODEL,
+        batch_size=EMBED_BATCH_SIZE,
+        cache_embeddings="wikidata_prototype"
+    )
+    textifier = WikidataTextifier(
+        language=LANGUAGE,
+        langvar_filename=TEXTIFIER_LANGUAGE
+    )
 
     while True:
         item = queue.get()
@@ -57,9 +66,17 @@ def process_items(queue, progress_bar):
             break  # Exit condition for worker processes
 
         item_id = item['id']
-        item_label = textifier.get_label(item_id, json.loads(item['labels']))
-        item_description = textifier.get_description(item_id, json.loads(item['descriptions']))
-        item_aliases = textifier.get_aliases(json.loads(item['aliases']))
+        item_label = textifier.get_label(
+            item_id,
+            json.loads(item['labels'])
+        )
+        item_description = textifier.get_description(
+            item_id,
+            json.loads(item['descriptions'])
+        )
+        item_aliases = textifier.get_aliases(
+            json.loads(item['aliases'])
+        )
 
         if item_label is not None:
             entity_obj = SimpleNamespace()
@@ -69,7 +86,11 @@ def process_items(queue, progress_bar):
             entity_obj.aliases = item_aliases
             entity_obj.claims = json.loads(item['claims'])
 
-            chunks = textifier.chunk_text(entity_obj, graph_store.tokenizer, max_length=graph_store.max_token_size)
+            chunks = textifier.chunk_text(
+                entity_obj,
+                graph_store.tokenizer,
+                max_length=graph_store.max_token_size
+            )
 
             for chunk_i, chunk in enumerate(chunks):
                 md5_hash = hashlib.md5(chunk.encode('utf-8')).hexdigest()
@@ -86,13 +107,15 @@ def process_items(queue, progress_bar):
                     "IsProperty": ('P' in item_id),
                     "DumpDate": DUMPDATE
                 }
-                graph_store.add_document(id=f"{item_id}_{LANGUAGE}_{chunk_i+1}", text=chunk, metadata=metadata)
+                graph_store.add_document(
+                    id=f"{item_id}_{LANGUAGE}_{chunk_i+1}",\
+                    text=chunk,
+                    metadata=metadata
+                )
 
         progress_bar.value += 1
 
-    while True:
-        if not graph_store.push_batch():  # Stop when batch is empty
-            break
+    graph_store.push_all()
 
 if __name__ == "__main__":
     queue = Queue(maxsize=QUEUE_SIZE)
