@@ -31,6 +31,7 @@ class AstraDBConnect:
         self.model = model
         self.collection_name = collection_name
         self.doc_batch = Queue()
+        self.InsertManyException = InsertManyException
 
         self.cache_on = (cache_embeddings is not None)
         if self.cache_on:
@@ -141,7 +142,7 @@ class AstraDBConnect:
             try:
                 self.graph_store.insert_many(docs, vectors=vectors)
                 break
-            except InsertManyException as e:
+            except self.InsertManyException as e:
                 pass
             except Exception as e:
                 print(e)
