@@ -142,7 +142,7 @@ services:
         API_KEY: "datastax_wikidata.json"
         EMBED_BATCH_SIZE: 100
         # QUEUE_SIZE: 5000
-        NUM_PROCESSES: 16
+        NUM_PROCESSES: 23
         OFFSET: 0
         COLLECTION_NAME: "wikidata_prototype"
         LANGUAGE: 'en'
