@@ -143,7 +143,7 @@ class AstraDBConnect:
                 self.graph_store.insert_many(docs, vectors=vectors)
                 break
             except self.InsertManyException as e:
-                pass
+                break
             except Exception as e:
                 print(e)
                 time.sleep(3)
