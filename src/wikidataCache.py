@@ -87,7 +87,8 @@ def create_cache_embedding_model(table_name):
             embeddingtype = EmbeddingType()
             for i in range(len(data)):
                 data[i]['embedding'] = embeddingtype.process_bind_param(
-                    data[i]['embedding']
+                    data[i]['embedding'],
+                    None
                 )
 
             with Session() as session:
