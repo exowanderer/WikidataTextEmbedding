@@ -84,6 +84,12 @@ def create_cache_embedding_model(table_name):
             - bool: True if the operation was successful, False otherwise.
             """
             worked = False
+            embeddingtype = EmbeddingType()
+            for i in range(len(data)):
+                data[i]['embedding'] = embeddingtype.process_bind_param(
+                    data[i]['embedding']
+                )
+
             with Session() as session:
                 try:
                     session.execute(

@@ -150,7 +150,7 @@ class AstraDBConnect:
 
         self.cache_model.add_bulk_cache([{
             'id': docs[i]['_id'],
-            'embedding': json.dumps(vectors[i], separators=(',', ':'))}
+            'embedding': vectors[i]}
             for i in range(len(docs))])
 
         return True
