@@ -48,7 +48,9 @@ if not API_KEY_FILENAME:
     API_KEY_FILENAME = os.listdir("../API_tokens")[0]
     print(f"API_KEY_FILENAME not provided. Using {API_KEY_FILENAME}")
 
-datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
+
+with open(f"../API_tokens/{API_KEY_FILENAME}") as json_in:
+    datastax_token = json.load(json_in)
 
 if ELASTICSEARCH:
     graph_store = KeywordSearchConnect(
