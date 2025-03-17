@@ -51,7 +51,7 @@ def convert_embeddings():
 
                         updated_records.append((base64_embedding, id))
                     except Exception as e:
-                        print(f"\nSkipping ID {id} due to error: {e}")
+                        pass
 
                 pbar.update(1)  # Update progress bar for each record processed
 
