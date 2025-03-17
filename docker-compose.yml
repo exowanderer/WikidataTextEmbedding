@@ -1,8 +1,8 @@
 services:
-  data_processing_save_ids:
+  data_processing_save_labels_descriptions:
     build:
       context: .
-      dockerfile: ./docker/1_Data_Processing_save_ids/Dockerfile
+      dockerfile: ./docker/1_Data_Processing_save_labels_descriptions/Dockerfile
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
     tty: true
@@ -12,10 +12,10 @@ services:
       LANGUAGE: "de"
       OFFSET: 0
 
-  data_processing_save_entities:
+  data_processing_save_items_per_lang:
     build:
       context: .
-      dockerfile: ./docker/2_Data_Processing_save_entities/Dockerfile
+      dockerfile: ./docker/2_Data_Processing_save_items_per_lang/Dockerfile
     volumes:
       - ./data:/data  # Mount the ./data folder from the host to /data in the container
     tty: true
@@ -43,12 +43,16 @@ services:
       PYTHONUNBUFFERED: 1
       MODEL: "jina"
       SAMPLE: "true"
-      API_KEY: "datastax_wikidata_nvidia.json"
+      API_KEY: "datastax_wikidata2.json"
       EMBED_BATCH_SIZE: 8
-      QUERY_BATCH_SIZE: 1000
-      OFFSET: 2560000
-      COLLECTION_NAME: "wikidata_test_v1"
-      LANGUAGE: 'ar'
+      QUERY_BATCH_SIZE: 100
+      OFFSET: 120000
+      COLLECTION_NAME: "wikidatav1"
+      LANGUAGE: 'en'
+      TEXTIFIER_LANGUAGE: 'en'
+      ELASTICSEARCH_URL: "http://localhost:9200"
+      ELASTICSEARCH: "false"
+    network_mode: "host"
 
   run_retrieval:
     build:
@@ -70,17 +74,16 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       MODEL: "jina"
-      API_KEY: "datastax_wikidata_nvidia.json"
-      COLLECTION_NAME: "wikidata_test_v1"
+      API_KEY: "datastax_wikidata.json"
+      COLLECTION_NAME: "wikidata_texttest"
       BATCH_SIZE: 100
-      EVALUATION_PATH: "Mintaka/processed_dataframe_langtest.pkl"
+      EVALUATION_PATH: "Mintaka/processed_dataframe.pkl"
       # COMPARATIVE: "true"
       # COMPARATIVE_COLS: "Correct QID,Wrong QID"
       QUERY_COL: "Question"
-      # QUERY_LANGUAGE: "ar"
-      # DB_LANGUAGE: "en,ar"
+      QUERY_LANGUAGE: "en"
+      # DB_LANGUAGE: "en"
       PREFIX: ""
-      ELASTICSEARCH_URL: "http://localhost:9200"
     network_mode: "host"
 
   run_rerank:
@@ -108,3 +111,41 @@ services:
       QUERY_COL: "Question"
       LANGUAGE: "de"
     network_mode: "host"
+
+  push_huggingface:
+    build:
+      context: .
+      dockerfile: ./docker/6_Push_Huggingface/Dockerfile
+    volumes:
+      - ./data:/data
+    tty: true
+    container_name: push_huggingface
+    environment:
+      PYTHONUNBUFFERED: 1
+      QUEUE_SIZE: 5000
+      NUM_PROCESSES: 4
+      SKIPLINES: 0
+      ITERATION: 36
+
+  create_prototype:
+      build:
+        context: .
+        dockerfile: ./docker/7_Create_Prototype/Dockerfile
+      volumes:
+        - ./data:/data
+        - ~/.cache/huggingface:/root/.cache/huggingface
+      tty: true
+      container_name: create_prototype
+      environment:
+        PYTHONUNBUFFERED: 1
+        MODEL: "jinaapi"
+        API_KEY: "datastax_wikidata.json"
+        EMBED_BATCH_SIZE: 100
+        # QUEUE_SIZE: 5000
+        NUM_PROCESSES: 23
+        OFFSET: 0
+        COLLECTION_NAME: "wikidata_prototype"
+        LANGUAGE: 'en'
+        TEXTIFIER_LANGUAGE: 'en'
+        # CHUNK_NUM: 5
+      network_mode: "host"

@@ -18,3 +18,5 @@ ragstack-ai-langchain[knowledge-store]==1.3.0
 langchain-astradb
 astrapy
 elasticsearch
+
+datasets

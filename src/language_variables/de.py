@@ -59,11 +59,18 @@ def qualifiers_to_text(qualifiers):
     """
     text = ""
     for property_label, qualifier_values in qualifiers.items():
-        if len(text) > 0:
-            text += f" ; "
+        if (qualifier_values is not None) and len(qualifier_values) > 0:
+            if len(text) > 0:
+                text += f" "
 
-        text += f"{property_label}: {', '.join(qualifier_values)}"
-    return text
+            text += f"({property_label}: {', '.join(qualifier_values)})"
+
+        elif (qualifier_values is not None):
+            text += f"(hat {property_label})"
+
+    if len(text) > 0:
+        return f" {text}"
+    return ""
 
 def properties_to_text(properties):
     """
@@ -77,21 +84,22 @@ def properties_to_text(properties):
     """
     properties_text = ""
     for property_label, claim_values in properties.items():
-        if len(claim_values) > 0:
+        if (claim_values is not None) and (len(claim_values) > 0):
 
             claims_text = ""
             for claim_value in claim_values:
                 if len(claims_text) > 0:
-                    claims_text += f",\n "
+                    claims_text += f", "
 
-                claims_text += f"„{claim_value['value']}"
+                claims_text += claim_value['value']
 
                 qualifiers = claim_value.get('qualifiers', {})
                 if len(qualifiers) > 0:
-                    claims_text += f" ({qualifiers_to_text(qualifiers)})"
+                    claims_text += qualifiers_to_text(qualifiers)
 
-                claims_text += f"“"
+            properties_text += f'\n- {property_label}: „{claims_text}“'
 
-            properties_text += f'\n- {property_label}: {claims_text}'
+        elif (claim_values is not None):
+            properties_text += f'\n- hat {property_label}'
 
     return properties_text

@@ -10,15 +10,14 @@ LABEL maintainer="philippe.saade@wikimedia.de"
 WORKDIR /app
 
 # Copy the requirements file into the container
-COPY ./docker/6_Push_Huggingface/requirements.txt requirements.txt
+COPY ./docker/1_Data_Processing_save_labels_descriptions/requirements.txt requirements.txt
 
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
-COPY ./docker/6_Push_Huggingface /app
+COPY ./docker/1_Data_Processing_save_labels_descriptions /app
 COPY ./src /src
-COPY ./API_tokens /API_tokens
 
 # Set up the volume for the data folder
 VOLUME [ "/data" ]
