@@ -14,6 +14,7 @@ LANGUAGE = os.getenv("LANGUAGE", 'en')
 
 
 def save_entities_to_sqlite(item, data_batch, sqlitDBlock):
+    lang_in_wp = False  # Default setting
     is_not_none = item is not None
     if is_not_none:
         lang_in_wp = WikidataLang.is_in_wikipedia(item, language=LANGUAGE)
