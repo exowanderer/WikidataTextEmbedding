@@ -45,6 +45,7 @@ FILEPATH = f"../data/Wikidata/chunks/chunk_{CHUNK_NUM}.json.gz"
 # TODO: Add location as env var
 # TODO: Sync data format from DATADUMP to chunk_sizes.json
 # TODO: Retrieve info from Hugging Face instead of storing it
+# TODO: Set this up as a separate script and run after __name__
 wikidata_chunksizes_path = os.path.join("wikidata_chunk_sizes_2024-09-18.json")
 
 with open(wikidata_chunksizes_path) as json_in:
