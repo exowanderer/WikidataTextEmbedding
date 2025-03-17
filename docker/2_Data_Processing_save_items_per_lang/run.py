@@ -14,22 +14,33 @@ LANGUAGE = os.getenv("LANGUAGE", 'en')
 
 
 def save_entities_to_sqlite(item, data_batch, sqlitDBlock):
-    lang_in_wp = False  # Default setting
-    is_not_none = item is not None
-    if is_not_none:
-        lang_in_wp = WikidataLang.is_in_wikipedia(item, language=LANGUAGE)
+    """_summary_
+    # TODO Add a docstring
 
-    if is_not_none and lang_in_wp:
-        item = WikidataLang.normalise_item(item, language=LANGUAGE)
-        data_batch.append(item)
+    Args:
+        item (_type_): _description_
+        data_batch (_type_): _description_
+        sqlitDBlock (_type_): _description_
+    """
+    if item is not None:
+        # Check if the item is a valid entity
+        return
 
-        with sqlitDBlock:
-            if len(data_batch) > PUSH_SIZE:
-                worked = WikidataLang.add_bulk_entities(list(
-                    data_batch[:PUSH_SIZE]
-                ))
-                if worked:
-                    del data_batch[:PUSH_SIZE]
+    lang_in_wp = WikidataLang.is_in_wikipedia(item, language=LANGUAGE)
+    if not lang_in_wp:
+        # If the entity is not in the specified language Wikipedia, skip
+        return
+
+    item = WikidataLang.normalise_item(item, language=LANGUAGE)
+    data_batch.append(item)
+
+    with sqlitDBlock:
+        if len(data_batch) > PUSH_SIZE:
+            worked = WikidataLang.add_bulk_entities(list(
+                data_batch[:PUSH_SIZE]
+            ))
+            if worked:
+                del data_batch[:PUSH_SIZE]
 
 
 if __name__ == "__main__":
