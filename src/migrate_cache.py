@@ -65,7 +65,12 @@ def convert_embeddings():
 
             offset += BATCH_SIZE  # Move to next batch
 
+    print("Optimizing database with VACUUM...")
+    cursor.execute("VACUUM;")
+    conn.commit()
+
     print("Migration completed successfully.")
+
     conn.close()
 
 if __name__ == "__main__":
