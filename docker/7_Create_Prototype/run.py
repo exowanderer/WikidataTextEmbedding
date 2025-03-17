@@ -88,12 +88,19 @@ def process_items(queue, progress_bar):
             break  # Exit condition for worker processes
 
         item_id = item['id']
-        item_label = textifier.get_label(item_id, json.loads(item['labels']))
+
+        item_label = textifier.get_label(
+            item_id,
+            json.loads(item['labels'])
+        )
+
         item_description = textifier.get_description(
             item_id,
             json.loads(item['descriptions'])
         )
-        item_aliases = textifier.get_aliases(json.loads(item['aliases']))
+        item_aliases = textifier.get_aliases(
+            json.loads(item['aliases'])
+        )
 
         if item_label is not None:
             # TODO: Verify: If label does not exist, then skip item
@@ -128,16 +135,15 @@ def process_items(queue, progress_bar):
 
                 graph_store.add_document(
                     id=f"{item_id}_{LANGUAGE}_{chunk_i+1}",
+
                     text=chunk,
                     metadata=metadata
                 )
 
         progress_bar.value += 1
 
-    while True:
-        # Leftover Maintenance: Ensure that the batch is emptied out
-        if not graph_store.push_batch():  # Stop when batch is empty
-            break
+
+    graph_store.push_all()
 
 
 if __name__ == "__main__":

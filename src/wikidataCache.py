@@ -5,6 +5,8 @@ from sqlalchemy.types import TypeDecorator
 
 import os
 import json
+import base64
+import numpy as np
 
 """
 SQLite database setup for caching the query embeddings for a faster
@@ -36,19 +38,28 @@ engine = create_engine(
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 
+class EmbeddingType(TypeDecorator):
+    """Custom SQLAlchemy type for storing embeddings as Base64 strings in SQLite."""
 
-class JSONType(TypeDecorator):
-    """Custom SQLAlchemy type for JSON storage in SQLite."""
     impl = Text
 
     def process_bind_param(self, value, dialect):
-        if value is not None:
-            return json.dumps(value, separators=(',', ':'))
+        """Convert a list of floats (embedding) to a Base64 string before storing."""
+        if value is not None and isinstance(value, list):
+            # Convert list to binary
+            binary_data = np.array(value, dtype=np.float32).tobytes()
+            # Encode to Base64 string
+            return base64.b64encode(binary_data).decode('utf-8')
         return None
 
     def process_result_value(self, value, dialect):
+        """Convert a Base64 string back to a list of floats when retrieving."""
         if value is not None:
-            return json.loads(value)
+            # Decode Base64
+            binary_data = base64.b64decode(value)
+            # Convert back to float32 list
+            embedding_array = np.frombuffer(binary_data, dtype=np.float32)
+            return embedding_array.tolist()
         return None
 
 
@@ -59,7 +70,7 @@ def create_cache_embedding_model(table_name):
         __tablename__ = table_name
 
         id = Column(Text, primary_key=True)
-        embedding = Column(JSONType)
+        embedding = Column(EmbeddingType)
 
         @staticmethod
         def add_cache(id, embedding):
@@ -99,6 +110,13 @@ def create_cache_embedding_model(table_name):
             - bool: True if the operation was successful, False otherwise.
             """
             worked = False
+            embeddingtype = EmbeddingType()
+            for i in range(len(data)):
+                data[i]['embedding'] = embeddingtype.process_bind_param(
+                    data[i]['embedding'],
+                    None
+                )
+
             with Session() as session:
                 exec_text = text(
                     f"""

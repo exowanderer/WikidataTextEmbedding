@@ -17,6 +17,7 @@ class AstraDBConnect:
         from langchain_astradb import AstraDBVectorStore
         from astrapy.info import CollectionVectorServiceOptions
         from astrapy import DataAPIClient
+        from astrapy.exceptions import InsertManyException
         from multiprocessing import Queue
 
         from transformers import AutoTokenizer
@@ -30,6 +31,7 @@ class AstraDBConnect:
         self.model = model
         self.collection_name = collection_name
         self.doc_batch = Queue()
+        self.InsertManyException = InsertManyException
 
         self.cache_on = (cache_embeddings is not None)
         if self.cache_on:
@@ -126,23 +128,29 @@ class AstraDBConnect:
         if len(docs) == 0:
             return False
 
-        try:
-            vectors = self.embeddings.embed_documents(
-                [doc['content'] for doc in docs]
-            )
-            self.graph_store.insert_many(docs, vectors=vectors)
-        except Exception as e:
-            print(e)
+        while True:
+            try:
+                vectors = self.embeddings.embed_documents(
+                    [doc['content'] for doc in docs]
+                )
+                break
+            except Exception as e:
+                print(e)
+                time.sleep(3)
 
-            # Put the documents back in the Queue and try again later.
-            for doc in docs:
-                self.doc_batch.put(doc)
-
-            return False
+        while True:
+            try:
+                self.graph_store.insert_many(docs, vectors=vectors)
+                break
+            except self.InsertManyException as e:
+                break
+            except Exception as e:
+                print(e)
+                time.sleep(3)
 
         self.cache_model.add_bulk_cache([{
             'id': docs[i]['_id'],
-            'embedding': json.dumps(vectors[i], separators=(',', ':'))}
+            'embedding': vectors[i]}
             for i in range(len(docs))])
 
         return True
