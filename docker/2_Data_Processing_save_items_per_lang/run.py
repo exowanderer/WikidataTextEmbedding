@@ -13,14 +13,14 @@ SKIPLINES = int(os.getenv("SKIPLINES", 0))
 LANGUAGE = os.getenv("LANGUAGE", 'en')
 
 
-def save_entities_to_sqlite(item, data_batch, sqlitDBlock):
+def save_entities_to_sqlite(item, data_batch, sqliteDBlock):
     """_summary_
     # TODO Add a docstring
 
     Args:
         item (_type_): _description_
         data_batch (_type_): _description_
-        sqlitDBlock (_type_): _description_
+        sqliteDBlock (_type_): _description_
     """
     if item is not None:
         # Check if the item is a valid entity
@@ -34,7 +34,7 @@ def save_entities_to_sqlite(item, data_batch, sqlitDBlock):
     item = WikidataLang.normalise_item(item, language=LANGUAGE)
     data_batch.append(item)
 
-    with sqlitDBlock:
+    with sqliteDBlock:
         if len(data_batch) > PUSH_SIZE:
             worked = WikidataLang.add_bulk_entities(list(
                 data_batch[:PUSH_SIZE]
@@ -45,7 +45,7 @@ def save_entities_to_sqlite(item, data_batch, sqlitDBlock):
 
 if __name__ == "__main__":
     multiprocess_manager = Manager()
-    sqlitDBlock = multiprocess_manager.Lock()
+    sqliteDBlock = multiprocess_manager.Lock()
     data_batch = multiprocess_manager.list()
 
     wikidata = WikidataDumpReader(
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         lambda item: save_entities_to_sqlite(
             item,
             data_batch,
-            sqlitDBlock
+            sqliteDBlock
         ),
         max_iterations=None,
         verbose=True

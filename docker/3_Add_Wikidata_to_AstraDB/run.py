@@ -38,7 +38,8 @@ if not TEXTIFIER_LANGUAGE:
 if not API_KEY_FILENAME:
     API_KEY_FILENAME = os.listdir("../API_tokens")[0]
 
-datastax_token = json.load(open(f"../API_tokens/{API_KEY_FILENAME}"))
+with open(f"../API_tokens/{API_KEY_FILENAME}") as json_in:
+    datastax_token = json.load(json_in)
 
 textifier = WikidataTextifier(
     language=LANGUAGE,
