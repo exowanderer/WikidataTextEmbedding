@@ -3,7 +3,9 @@ import json
 from src.wikidataCache import create_cache_embedding_model
 
 class AstraDBConnect:
-    def __init__(self, datastax_token, collection_name, model='jina', batch_size=8, cache_embeddings=None):
+    def __init__(
+            self, datastax_token, collection_name, model='jina', 
+            batch_size=8, cache_embeddings=None):
         """
         Initialize the AstraDBConnect object with the corresponding embedding model.
 
