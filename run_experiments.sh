@@ -55,7 +55,11 @@
 #     -e DB_LANGUAGE="en" \
 #     -e API_KEY="datastax_wikidata2.json" run_retrieval
 
-docker compose run --build -e CHUNK_NUM=112 create_prototype
-docker compose run --build -e CHUNK_NUM=111 create_prototype
-docker compose run --build -e CHUNK_NUM=110 create_prototype
-docker compose run --build -e CHUNK_NUM=109 create_prototype
+# docker compose run --build -e CHUNK_NUM=112 create_prototype
+# docker compose run --build -e CHUNK_NUM=111 create_prototype
+# docker compose run --build -e CHUNK_NUM=110 create_prototype
+# docker compose run --build -e CHUNK_NUM=109 create_prototype
+
+for chunk_num in `seq 101 -1 100`;
+    do docker compose run --build -e CHUNK_NUM=$chunk_num create_prototype; 
+done
